@@ -4,7 +4,7 @@
 - 転職用の作品。ASP.NET Core（コントローラー）の Web API。
 - 家計の記録。金額と店名だけで取引を登録し、分類ルールで分類を自動で決め、月ごと・分類ごとに集計する。詳しくは `docs/要件定義.md`。
 - リポジトリ名は「店の一覧」だったころの名前のまま。店を探す道具は Java の tenant-search（別のリポジトリ）。
-- .NET 10 / EF Core / SQLite。完成したら Azure App Service に載せる。
+- .NET 10 / EF Core / PostgreSQL（手元は Docker、Azure は Flexible Server の無料枠）。完成したら Azure App Service に載せる。
 - 一番大事なのは、面接で全部を自分の言葉で説明できること。
 
 ## AI の役割
