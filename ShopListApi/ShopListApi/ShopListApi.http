@@ -1,1 +1,45 @@
 @ShopListApi_HostAddress = http://localhost:5247
+
+### 1. 分類の一覧（最初は空の [] のはず）
+GET {{ShopListApi_HostAddress}}/categories
+Accept: application/json
+
+### 2. 分類を作る（201 と Location が返る）
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "食費"
+}
+
+### 3. 同じ名前でもう一度作る（409 category.duplicate_name）
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "食費"
+}
+
+### 4. 空白だけの名前（400）
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "   "
+}
+
+### 5. 21文字の名前（400）
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "あいうえおかきくけこさしすせそたちつてとな"
+}
+
+### 6. 分類を1件（2 で返った id に変える）
+GET {{ShopListApi_HostAddress}}/categories/1
+Accept: application/json
+
+### 7. 無い分類（404 category.not_found）
+GET {{ShopListApi_HostAddress}}/categories/999
+Accept: application/json
