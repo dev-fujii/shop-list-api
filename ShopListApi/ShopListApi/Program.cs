@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShopListApi.Common;
 using ShopListApi.Data;
 
 
@@ -10,7 +11,13 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+
+// --- 自分で作ったサービスの登録（DI） --- //
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// 今のユーザー: ログインを作るまでは仮のユーザーを返す。
+// リクエストごとに1つ作る
+builder.Services.AddScoped<CurrentUser>();
 
 var app = builder.Build();
 
