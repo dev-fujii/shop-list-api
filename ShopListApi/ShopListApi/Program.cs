@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShopListApi.Categories;
 using ShopListApi.Common;
 using ShopListApi.Data;
 
@@ -20,6 +21,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // 今のユーザー: ログインを作るまでは仮のユーザーを返す。
 // リクエストごとに1つ作る
 builder.Services.AddScoped<CurrentUser>();
+
+// 分類の処理
+builder.Services.AddScoped<CategoryService>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();
