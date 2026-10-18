@@ -8,20 +8,17 @@ namespace ShopListApi.Data;
 /// </summary>
 public class AppDbContext : DbContext
 {
-
     /// <summary>
     /// 分類の表
     /// 分類の一覧の取得・追加・削除は、ここを通して行う
     /// </summary>
     public DbSet<Category> Categories { get; set; } = null!;
 
-
     #region // --- 内部処理 -- //
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
-
 
     /// <summary>
     /// DBに保存するデータのルール作成
@@ -35,5 +32,4 @@ public class AppDbContext : DbContext
     }
 
     #endregion
-
 }

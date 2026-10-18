@@ -9,7 +9,9 @@ public class Category
     /// <summary>
     /// 名前の最大文字数
     /// </summary>
+    /// <remarks>
     /// constなのでDBに保存されない。
+    /// </remarks>
     public const int NameMaxLength = 20;
 
     /// <summary>

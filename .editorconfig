@@ -1,0 +1,11 @@
+# このリポジトリの書き方の決まり（Visual Studio などのエディターが読む）
+# 各自のエディターの設定より、こちらが優先される
+root = true
+
+[*.cs]
+# 名前空間は1行の形（namespace ShopListApi.Categories;）で書く。{ } で囲む形なら警告を出す
+csharp_style_namespace_declarations = file_scoped:warning
+
+# マイグレーションは dotnet ef が自動で作るファイルなので、書き方の警告を出さない
+[**/Migrations/*.cs]
+generated_code = true
