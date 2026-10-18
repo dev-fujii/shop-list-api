@@ -21,6 +21,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // リクエストごとに1つ作る
 builder.Services.AddScoped<CurrentUser>();
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<AppExceptionHandler>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -28,6 +31,9 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// 例外をつかまえて、AppExceptionHandlerに渡す
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 
