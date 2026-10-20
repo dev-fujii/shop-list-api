@@ -41,6 +41,28 @@ public class CategoriesController: ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
+    /// <summary>
+    /// PUT /categories/{id}: 分類の名前を変える（204。無ければ 404、同じ名前なら 409、入力が正しくなければ 400）
+    /// </summary>
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult> Update(int id, UpdateCategoryRequest request)
+    {
+        await _categoryService.UpdateAsync(id, request);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// DELETE /categories/{id}: 分類を消す（204。無ければ 404）
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult> Delete(int id)
+    {
+        await _categoryService.DeleteAsync(id);
+        return NoContent();
+    }
+
+
+
     #region // --- 内部処理 --- //
 
     public CategoriesController(CategoryService categoryService)

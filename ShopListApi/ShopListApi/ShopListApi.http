@@ -43,3 +43,35 @@ Accept: application/json
 ### 7. 無い分類（404 category.not_found）
 GET {{ShopListApi_HostAddress}}/categories/999
 Accept: application/json
+
+### 8. 分類の名前を変える（204。6 で名前が変わったか確かめる）
+PUT {{ShopListApi_HostAddress}}/categories/1
+Content-Type: application/json
+
+{
+  "name": "株"
+}
+
+### 9. 無い分類の名前を変える（404 category.not_found）
+PUT {{ShopListApi_HostAddress}}/categories/999
+Content-Type: application/json
+
+{
+  "name": "株"
+}
+
+### 10. ほかの分類と同じ名前に変える（409 category.duplicate_name）
+PUT {{ShopListApi_HostAddress}}/categories/2
+Content-Type: application/json
+
+{
+  "name": "食事"
+}
+
+### 11. 分類を消す（204）
+DELETE {{ShopListApi_HostAddress}}/categories/1
+Content-Type: application/json
+
+### 12. 無い分類を消す（404 category.not_found）
+DELETE {{ShopListApi_HostAddress}}/categories/999
+Content-Type: application/json
