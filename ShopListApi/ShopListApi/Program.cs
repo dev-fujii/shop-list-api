@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
 using ShopListApi.Common;
@@ -7,7 +9,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    // JSON の enum は、数字ではなく名前（"expense"・"auto" など）で読み書きする。数字は受け付けない
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false)));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -38,6 +44,9 @@ if (app.Environment.IsDevelopment())
 
 // 例外をつかまえて、AppExceptionHandlerに渡す
 app.UseExceptionHandler();
+
+// 本文のないエラー（無い URL の 404 など）も、Problem Details の形にする
+app.UseStatusCodePages();
 
 app.UseHttpsRedirection();
 

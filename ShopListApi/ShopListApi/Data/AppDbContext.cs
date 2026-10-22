@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
+using ShopListApi.Transactions;
 
 namespace ShopListApi.Data;
 
@@ -14,7 +15,16 @@ public class AppDbContext : DbContext
     /// </summary>
     public DbSet<Category> Categories { get; set; } = null!;
 
-    #region // --- 内部処理 -- //
+    /// <summary>
+    /// 取引の表
+    /// 取引の一覧の取得・追加・削除は、ここを通して行う
+    /// </summary>
+    /// <remarks>
+    /// 表の名前（Transactions）は、このプロパティの名前から決まる。
+    /// </remarks>
+    public DbSet<Transaction> Transactions { get; set; } = null!;
+
+    #region // --- 内部処理 --- //
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {

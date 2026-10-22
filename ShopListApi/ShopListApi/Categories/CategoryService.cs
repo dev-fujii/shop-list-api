@@ -19,8 +19,8 @@ public class CategoryService
     {
         return await _db.Categories
             .Where(c => c.UserId == _currentUser.Id)
-            .OrderBy(c=>c.Id)
-            .Select(c=> new CategoryResponse
+            .OrderBy(c => c.Id)
+            .Select(c => new CategoryResponse
             {
                 Id = c.Id,
                 Name = c.Name
@@ -33,14 +33,14 @@ public class CategoryService
     /// </summary>
     public async Task<CategoryResponse> GetByIdAsync(int id)
     {
-        //自身のユーザーIDと分類が一致してるか確認
+        // 自身のユーザーIDと分類が一致してるか確認
         var category = await _db.Categories
-                    .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
 
         // 無い・他人の分類なら 404
         if (category is null)
         {
-            throw new AppException   
+            throw new AppException
             (
                 StatusCodes.Status404NotFound,
                 ErrorCodes.Categories.NotFound,
@@ -84,7 +84,7 @@ public class CategoryService
 
         // チェックが全部終わってから、最後に1回だけ書き込む
         _db.Categories.Add(newCategory);
-        await _db.SaveChangesAsync();
+        await SaveAsync();
 
         return new CategoryResponse
         {
@@ -100,7 +100,7 @@ public class CategoryService
     public async Task UpdateAsync(int id, UpdateCategoryRequest request)
     {
         var data = await _db.Categories
-                   .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
 
         if (data is null)
         {
@@ -129,7 +129,7 @@ public class CategoryService
         }
 
         data.Name = request.Name;
-        await _db.SaveChangesAsync();
+        await SaveAsync();
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public class CategoryService
     public async Task DeleteAsync(int id)
     {
         var data = await _db.Categories
-                   .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
+            .FirstOrDefaultAsync(c => c.Id == id && c.UserId == _currentUser.Id);
 
         if (data is null)
         {
@@ -154,14 +154,13 @@ public class CategoryService
                 ErrorCodes.Categories.NotFound,
                 "分類が見つかりません。"
             );
-        }   
-        
+        }
+
         _db.Categories.Remove(data);
         await _db.SaveChangesAsync();
     }
 
     #region // --- 内部処理 --- //
-
 
     public CategoryService(AppDbContext db, CurrentUser currentUser)
     {
@@ -169,6 +168,29 @@ public class CategoryService
         _currentUser = currentUser;
     }
 
+    /// <summary>
+    /// 書き込む。同じ名前で DB に断られたら 409
+    /// </summary>
+    /// <remarks>
+    /// 先に AnyAsync で確かめていても、同じ名前が同時に2回送られると、両方が確かめを通ってしまう。
+    /// そのときは DB の一意インデックス（UserId と Name）が2回目を断るので、それも 409 にする。
+    /// </remarks>
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsUniqueViolation())
+        {
+            throw new AppException
+            (
+                StatusCodes.Status409Conflict,
+                ErrorCodes.Categories.DuplicateName,
+                "同じ名前の分類が既に存在します。"
+            );
+        }
+    }
 
     private readonly AppDbContext _db;
     private readonly CurrentUser _currentUser;

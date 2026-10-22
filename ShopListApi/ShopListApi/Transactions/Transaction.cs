@@ -5,6 +5,14 @@
 /// </summary>
 public class Transaction
 {
+    /// <summary>
+    /// 店名の最大文字数
+    /// </summary>
+    /// <remarks>
+    /// constなのでDBに保存されない。
+    /// 分類ルールのキーワードも、この上限にそろえる（店名をそのままキーワードにするため）。
+    /// </remarks>
+    public const int MerchantMaxLength = 50;
 
     /// <summary>
     /// ユーザーID
@@ -28,19 +36,19 @@ public class Transaction
     public int Amount { get; set; }
 
     /// <summary>
-    /// 店舗名
+    /// 店名
     /// </summary>
-    public required string ShopName { get; set; }
+    public required string Merchant { get; set; }
 
     /// <summary>
     /// 日付
     /// </summary>
-    public DateOnly Date{ get; set; }
+    public DateOnly Date { get; set; }
 
     /// <summary>
     /// 入力元
     /// </summary>
-    public TransactionSource InputSource { get; set; }
+    public TransactionSource Source { get; set; }
 
     /// <summary>
     /// 種類（支出・収入）

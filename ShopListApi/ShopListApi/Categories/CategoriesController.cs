@@ -8,7 +8,7 @@ namespace ShopListApi.Categories;
 /// </summary>
 [ApiController]
 [Route("categories")]
-public class CategoriesController: ControllerBase
+public class CategoriesController : ControllerBase
 {
 
     /// <summary>
@@ -60,8 +60,6 @@ public class CategoriesController: ControllerBase
         await _categoryService.DeleteAsync(id);
         return NoContent();
     }
-
-
 
     #region // --- 内部処理 --- //
 
