@@ -15,6 +15,16 @@ public class Transaction
     public const int MerchantMaxLength = 50;
 
     /// <summary>
+    /// 金額の最小値（1円）
+    /// </summary>
+    public const int AmountMin = 1;
+
+    /// <summary>
+    /// 金額の最大値（1,000万円未満なので 9,999,999円）
+    /// </summary>
+    public const int AmountMax = 9_999_999;
+
+    /// <summary>
     /// ユーザーID
     /// </summary>
     public Guid UserId { get; set; }
