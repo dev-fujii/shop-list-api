@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using ShopListApi.Common; 
 namespace ShopListApi.Transactions;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// 取引の API（/transactions）
@@ -15,13 +16,12 @@ public class TransactionsController : ControllerBase
     /// GET /transactions: 自分の取引の一覧（日付の新しい順。同じ日付は id の大きい順）
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PagedResponse<TransactionResponse>>> GetAll(int page = 1, int pageSize = 50)
+    public async Task<ActionResult<PagedResponse<TransactionResponse>>> GetAll(int page = 1, int? pageSize = null)
     {
         // --- バリデーションチェック --- //
 
-        //TODO:
-        //後で定数にする
-            
+        var actualPageSize = pageSize ?? _paginationOptions.DefaultPageSize;
+
         // ページ番号のチェック
         if (page < 1)
         {
@@ -30,13 +30,13 @@ public class TransactionsController : ControllerBase
         }
 
         // 1ページの件数のチェック
-        if (pageSize < 1 || pageSize > 100)
+        if (actualPageSize < 1 || actualPageSize > _paginationOptions.MaxPageSize)
         {
-            ModelState.AddModelError(nameof(pageSize), "pageSize は1～100で指定してください。");
+            ModelState.AddModelError(nameof(pageSize), $"pageSize は1～{_paginationOptions.MaxPageSize}で指定してください。");
             return ValidationProblem(ModelState);
         }
 
-        var transactions = await _transactionService.GetAllAsync(page, pageSize);
+        var transactions = await _transactionService.GetAllAsync(page, actualPageSize);
         return Ok(transactions);
     }
 
@@ -63,12 +63,18 @@ public class TransactionsController : ControllerBase
 
     #region // --- 内部処理 --- //
 
-    public TransactionsController(TransactionService transactionService)
+    public TransactionsController
+    (
+        TransactionService transactionService,
+        IOptions<PaginationOptions> paginationOptions
+    )
     {
         _transactionService = transactionService;
+        _paginationOptions = paginationOptions.Value;
     }
 
     private readonly TransactionService _transactionService;
+    private readonly PaginationOptions _paginationOptions;
 
     #endregion
 }

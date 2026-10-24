@@ -25,6 +25,9 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(options =>
    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.Configure<PaginationOptions>(
+builder.Configuration.GetSection("Pagination"));
+
 // 今のユーザー: ログインを作るまでは仮のユーザーを返す。
 // リクエストごとに1つ作る
 builder.Services.AddScoped<CurrentUser>();
