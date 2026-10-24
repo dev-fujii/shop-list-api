@@ -12,6 +12,16 @@ public class TransactionsController : ControllerBase
 {
 
     /// <summary>
+    /// GET /transactions: 自分の取引の一覧（日付の新しい順。同じ日付は id の大きい順）
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<List<TransactionResponse>>> GetAll()
+    {
+        var transactions = await _transactionService.GetAllAsync();
+        return Ok(transactions);
+    }
+
+    /// <summary>
     /// GET /transactions/{id}: 自分の取引を1件（無ければ 404）
     /// </summary>
     [HttpGet("{id:int}")]

@@ -74,6 +74,29 @@ public class TransactionService
         };
     }
 
+    /// <summary>
+    /// すべての取引取得
+    /// </summary>
+    public async Task<List<TransactionResponse>> GetAllAsync()
+    {
+        var transactions = await _db.Transactions
+            .Where(t => t.UserId == _currentUser.Id)
+            .OrderByDescending(t => t.Date)
+            .ThenByDescending(t => t.Id)
+            .ToListAsync();
+
+        return transactions.Select(t => new TransactionResponse
+        {
+            CategoryId = t.CategoryId,
+            Id = t.Id,
+            Amount = t.Amount,
+            Merchant = t.Merchant,
+            Date = t.Date,
+            Source = t.Source,
+            Type = t.Type
+        }).ToList();
+    }
+
     #region // --- 内部処理 --- //
 
     public TransactionService(AppDbContext db, CurrentUser currentUser)
