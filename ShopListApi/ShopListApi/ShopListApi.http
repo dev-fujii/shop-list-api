@@ -94,3 +94,86 @@ DELETE {{ShopListApi_HostAddress}}/categories/{{daily.response.body.$.id}}
 ### 15. 無い URL（404。本文は Problem Details の形）
 GET {{ShopListApi_HostAddress}}/nothing
 Accept: application/json
+
+# ---------- 取引 ----------
+# 取引の削除はまだ無いので、送るたびに DB に取引が残る
+
+### 16. 取引を登録する・全部の項目あり（201 と Location が返る）
+# @name lawson
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 1200,
+  "merchant": "ローソン",
+  "date": "2026-10-17",
+  "type": "expense",
+  "source": "auto"
+}
+
+### 17. date と type を省く（201。date は日本時間の今日、type は expense になる）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 500,
+  "merchant": "自動販売機",
+  "source": "manual"
+}
+
+### 18. source を省く（400。errors に Source）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 1200,
+  "merchant": "ローソン"
+}
+
+### 19. 金額が 0（400。errors に Amount）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 0,
+  "merchant": "ローソン",
+  "source": "auto"
+}
+
+### 20. 金額が 1,000万円（400。9,999,999 までなので）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 10000000,
+  "merchant": "ローソン",
+  "source": "auto"
+}
+
+### 21. 51文字の店名（400）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 1200,
+  "merchant": "あいうえおかきくけこあいうえおかきくけこあいうえおかきくけこあいうえおかきくけこあいうえおかきくけこさ",
+  "source": "auto"
+}
+
+### 22. source を数字で送る（400。名前の文字列だけ受け付ける）
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 1200,
+  "merchant": "ローソン",
+  "source": 0
+}
+
+### 23. 取引を1件（16 で登録した取引）
+GET {{ShopListApi_HostAddress}}/transactions/{{lawson.response.body.$.id}}
+Accept: application/json
+
+### 24. 無い取引（404 transaction.not_found）
+GET {{ShopListApi_HostAddress}}/transactions/999
+Accept: application/json

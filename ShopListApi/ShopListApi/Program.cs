@@ -1,9 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
 using ShopListApi.Common;
 using ShopListApi.Data;
+using ShopListApi.Transactions;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,9 @@ builder.Services.AddScoped<CurrentUser>();
 
 // 分類の処理
 builder.Services.AddScoped<CategoryService>();
+
+// 取引の処理
+builder.Services.AddScoped<TransactionService>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();
