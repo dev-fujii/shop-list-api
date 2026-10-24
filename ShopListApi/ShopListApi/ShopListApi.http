@@ -181,3 +181,12 @@ Accept: application/json
 ### 25. 取引の一覧（200。日付の新しい順、同じ日付は id の大きい順。17 の今日の取引が 16 より先）
 GET {{ShopListApi_HostAddress}}/transactions
 Accept: application/json
+
+
+### 26. 1ページ目を1件取得
+GET {{ShopListApi_HostAddress}}/transactions?page=1&pageSize=1
+Accept: application/json
+
+### 27. 2ページ目を1件取得
+GET {{ShopListApi_HostAddress}}/transactions?page=2&pageSize=1
+Accept: application/json

@@ -75,26 +75,46 @@ public class TransactionService
     }
 
     /// <summary>
-    /// すべての取引取得
+    /// 指定されたページの取引取得
     /// </summary>
-    public async Task<List<TransactionResponse>> GetAllAsync()
+    public async Task<PagedResponse<TransactionResponse>> GetAllAsync(int page, int pageSize)
     {
-        var transactions = await _db.Transactions
-            .Where(t => t.UserId == _currentUser.Id)
-            .OrderByDescending(t => t.Date)
-            .ThenByDescending(t => t.Id)
-            .ToListAsync();
+        var query = _db.Transactions.Where(t => t.UserId == _currentUser.Id);
 
-        return transactions.Select(t => new TransactionResponse
-        {
-            CategoryId = t.CategoryId,
-            Id = t.Id,
-            Amount = t.Amount,
-            Merchant = t.Merchant,
-            Date = t.Date,
-            Source = t.Source,
-            Type = t.Type
-        }).ToList();
+        return new PagedResponse<TransactionResponse>
+        (
+            await query
+            
+                //新しい日付順に
+                .OrderByDescending(t => t.Date)
+
+                //同じ日付ならIDの大きい順
+                .ThenByDescending(t => t.Id)
+
+                //指定ページより前の件数を飛ばす
+                .Skip((page - 1) * pageSize)
+
+                //指定ページの分を、最大 pageSize 件取得する
+                .Take(pageSize)
+
+                // 各取引を TransactionResponse の形にする
+                .Select(t => new TransactionResponse
+                {
+                    Id = t.Id,
+                    Amount = t.Amount,
+                    Merchant = t.Merchant,
+                    Date = t.Date,
+                    Type = t.Type,
+                    Source = t.Source,
+                    CategoryId = t.CategoryId
+                })
+
+                // DBに問い合わせ、結果をリストにする
+                .ToListAsync(),
+            page,
+            pageSize,
+            await query.CountAsync()
+         );
     }
 
     #region // --- 内部処理 --- //

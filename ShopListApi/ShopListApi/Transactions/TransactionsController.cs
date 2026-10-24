@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-
+using ShopListApi.Common; 
 namespace ShopListApi.Transactions;
 
 /// <summary>
@@ -15,9 +15,28 @@ public class TransactionsController : ControllerBase
     /// GET /transactions: 自分の取引の一覧（日付の新しい順。同じ日付は id の大きい順）
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<List<TransactionResponse>>> GetAll()
+    public async Task<ActionResult<PagedResponse<TransactionResponse>>> GetAll(int page = 1, int pageSize = 50)
     {
-        var transactions = await _transactionService.GetAllAsync();
+        // --- バリデーションチェック --- //
+
+        //TODO:
+        //後で定数にする
+            
+        // ページ番号のチェック
+        if (page < 1)
+        {
+            ModelState.AddModelError(nameof(page), "page は1以上で指定してください。");
+            return ValidationProblem(ModelState);
+        }
+
+        // 1ページの件数のチェック
+        if (pageSize < 1 || pageSize > 100)
+        {
+            ModelState.AddModelError(nameof(pageSize), "pageSize は1～100で指定してください。");
+            return ValidationProblem(ModelState);
+        }
+
+        var transactions = await _transactionService.GetAllAsync(page, pageSize);
         return Ok(transactions);
     }
 
