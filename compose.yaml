@@ -48,6 +48,8 @@ services:
       # appsettings の ConnectionStrings:DefaultConnection と同じ。入れ子は __ でつなぐ
       # Host は compose のサービス名 db、Port はコンテナの中の 5432
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # 仮の鍵（設定の ApiKey:Key。ApiKeyOptions が読む）。無いと API は起動しない
+      ApiKey__Key: ${API_KEY}
 
     ports:
       # 左: PC 側（.env の API_PORT。無ければ 8080） / 右: コンテナの中（ASP.NET Core の既定の 8080）

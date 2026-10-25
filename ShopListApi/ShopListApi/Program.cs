@@ -28,6 +28,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.Configure<PaginationOptions>(
 builder.Configuration.GetSection("Pagination"));
 
+// (仮の鍵)ApiKey セクションから読む。
+builder.Services.AddOptions<ApiKeyOptions>()
+    .Bind(builder.Configuration.GetSection("ApiKey"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // 今のユーザー: ログインを作るまでは仮のユーザーを返す。
 // リクエストごとに1つ作る
 builder.Services.AddScoped<CurrentUser>();
@@ -56,6 +62,9 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 
 app.UseHttpsRedirection();
+
+// 仮の鍵を確かめる。無い・違えば 401（UseStatusCodePages が Problem Details の形にする）
+app.UseMiddleware<ApiKeyMiddleware>();
 
 app.UseAuthorization();
 
