@@ -97,7 +97,7 @@ GET {{ShopListApi_HostAddress}}/nothing
 Accept: application/json
 
 # ---------- 取引の登録・入力チェック ----------
-# POSTを送るたびに取引が増える。不要な取引は47のように削除する
+# POSTを送るたびに取引が増える。不要な取引は49のように削除する
 
 ### 16. 取引を登録する・全部の項目あり（201 と Location が返る）
 # @name lawson
@@ -262,7 +262,7 @@ Content-Type: application/json
 }
 
 ### 36. 更新後の取引を取得する（200。35の内容が反映され、source は manual のまま）
-# 41〜43のエラーのあとも再送し、35の値から変わっていないことを確認する
+# 41〜45のエラーのあとも再送し、35の値から変わっていないことを確認する
 GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Accept: application/json
 
@@ -307,7 +307,29 @@ Content-Type: application/json
   "categoryId": null
 }
 
-### 43. 無い取引を更新する（404 transaction.not_found）
+### 43. 日付を省いて更新する（400。errors に Date。取引は変更されない）
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 9999,
+  "merchant": "変更されないはず",
+  "type": "expense",
+  "categoryId": null
+}
+
+### 44. 種類を省いて更新する（400。errors に Type。取引は変更されない）
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 9999,
+  "merchant": "変更されないはず",
+  "date": "2026-10-22",
+  "categoryId": null
+}
+
+### 45. 無い取引を更新する（404 transaction.not_found）
 PUT {{ShopListApi_HostAddress}}/transactions/999
 Content-Type: application/json
 
@@ -319,11 +341,11 @@ Content-Type: application/json
   "categoryId": null
 }
 
-### 44. 使用中の分類を削除する（409 category.in_use）
+### 46. 使用中の分類を削除する（409 category.in_use）
 DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
 Accept: application/json
 
-### 45. 取引を未分類に変更する（204。36を再送すると categoryId は null）
+### 47. 取引を未分類に変更する（204。36を再送すると categoryId は null）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Content-Type: application/json
 
@@ -335,18 +357,18 @@ Content-Type: application/json
   "categoryId": null
 }
 
-### 46. 使われなくなった分類を削除する（204）
+### 48. 使われなくなった分類を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
 Accept: application/json
 
-### 47. 取引を削除する（204）
+### 49. 取引を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Accept: application/json
 
-### 48. 削除した取引を取得する（404 transaction.not_found）
+### 50. 削除した取引を取得する（404 transaction.not_found）
 GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Accept: application/json
 
-### 49. 同じ取引をもう一度削除する（404 transaction.not_found）
+### 51. 同じ取引をもう一度削除する（404 transaction.not_found）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Accept: application/json
