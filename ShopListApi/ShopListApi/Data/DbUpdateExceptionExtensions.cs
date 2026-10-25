@@ -19,4 +19,15 @@ public static class DbUpdateExceptionExtensions
     {
         return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
     }
+
+    /// <summary>
+    /// 外部キーに断られたか
+    /// </summary>
+    /// <remarks>
+    /// PostgreSQL は、無い行を指したり、指されている行を消そうとするとエラーコード 23503を返す。
+    /// </remarks>
+    public static bool IsForeignKeyViolation(this DbUpdateException exception)
+    {
+        return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation };
+    }
 }

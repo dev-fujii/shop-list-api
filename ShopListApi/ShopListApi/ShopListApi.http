@@ -171,9 +171,8 @@ Content-Type: application/json
   "source": 0
 }
 
-# ---------- 取引の1件取得 ----------
-
 ### 23. 取引を1件（200。16 で登録した取引）
+# ---------- ここから取引の1件取得 ----------
 GET {{ShopListApi_HostAddress}}/transactions/{{lawson.response.body.$.id}}
 Accept: application/json
 
@@ -371,4 +370,143 @@ Accept: application/json
 
 ### 51. 同じ取引をもう一度削除する（404 transaction.not_found）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Accept: application/json
+
+# ---------- 判定の順番（400 → 404 → 422） ----------
+
+### 52. 入力が正しくない＋無い取引（400。取引を探す前に入力チェックで止まる）
+PUT {{ShopListApi_HostAddress}}/transactions/999
+Content-Type: application/json
+
+{
+  "amount": 0,
+  "merchant": "確認用",
+  "date": "2026-10-21",
+  "type": "income",
+  "categoryId": null
+}
+
+### 53. 無い取引＋無い分類（404 transaction.not_found。分類より先に取引を探す）
+PUT {{ShopListApi_HostAddress}}/transactions/999
+Content-Type: application/json
+
+{
+  "amount": 1500,
+  "merchant": "確認用",
+  "date": "2026-10-21",
+  "type": "income",
+  "categoryId": 999
+}
+
+### 54. 絞り込み用の分類を作る（201）
+# ---------- ここから絞り込みの組み合わせ ----------
+# ほかのデータと混ざらないよう、2001年1月の取引を3件作る
+#   A: 01-10・分類あり ／ B: 01-20・分類あり ／ C: 01-20・未分類
+# 最後に作ったデータを消す。54の分類名が重複したら前回のデータを確認する
+# （本文のある要求のすぐ後にコメントを書くと、本文の続きとして送られるため、ここに置く）
+# @name filterCategory
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "絞り込み確認用"
+}
+
+### 55. 取引 A を作る（201）
+# @name filterA
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 100,
+  "merchant": "絞り込みA",
+  "date": "2001-01-10",
+  "type": "expense",
+  "source": "manual"
+}
+
+### 56. 取引 B を作る（201）
+# @name filterB
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 200,
+  "merchant": "絞り込みB",
+  "date": "2001-01-20",
+  "type": "expense",
+  "source": "manual"
+}
+
+### 57. 取引 C を作る（201。未分類のまま）
+# @name filterC
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 300,
+  "merchant": "絞り込みC",
+  "date": "2001-01-20",
+  "type": "expense",
+  "source": "manual"
+}
+
+### 58. A に分類を付ける（204）
+PUT {{ShopListApi_HostAddress}}/transactions/{{filterA.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 100,
+  "merchant": "絞り込みA",
+  "date": "2001-01-10",
+  "type": "expense",
+  "categoryId": {{filterCategory.response.body.$.id}}
+}
+
+### 59. B に分類を付ける（204）
+PUT {{ShopListApi_HostAddress}}/transactions/{{filterB.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 200,
+  "merchant": "絞り込みB",
+  "date": "2001-01-20",
+  "type": "expense",
+  "categoryId": {{filterCategory.response.body.$.id}}
+}
+
+### 60. to だけ（200。A だけ。B・C と2026年の取引は出ない）
+GET {{ShopListApi_HostAddress}}/transactions?to=2001-01-15
+Accept: application/json
+
+### 61. from だけ（200。B・C と2026年の取引が出て、A は出ない）
+GET {{ShopListApi_HostAddress}}/transactions?from=2001-01-15
+Accept: application/json
+
+### 62. 期間だけ（200。B・C の2件）
+GET {{ShopListApi_HostAddress}}/transactions?from=2001-01-15&to=2001-01-31
+Accept: application/json
+
+### 63. 分類だけ（200。A・B の2件）
+GET {{ShopListApi_HostAddress}}/transactions?categoryId={{filterCategory.response.body.$.id}}
+Accept: application/json
+
+### 64. 分類と期間の両方（200。B の1件だけ。A は期間外、C は分類が違う）
+GET {{ShopListApi_HostAddress}}/transactions?categoryId={{filterCategory.response.body.$.id}}&from=2001-01-15&to=2001-01-31
+Accept: application/json
+
+### 65. 後片付け: A を削除する（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{filterA.response.body.$.id}}
+Accept: application/json
+
+### 66. 後片付け: B を削除する（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{filterB.response.body.$.id}}
+Accept: application/json
+
+### 67. 後片付け: C を削除する（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{filterC.response.body.$.id}}
+Accept: application/json
+
+### 68. 後片付け: 分類を削除する（204。A・B を消したので使われていない）
+DELETE {{ShopListApi_HostAddress}}/categories/{{filterCategory.response.body.$.id}}
 Accept: application/json

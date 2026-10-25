@@ -157,14 +157,21 @@ public class CategoryService
 
         if (await HasTransactionsForCategoryAsync(id))
         {
-            throw new AppException(
-                StatusCodes.Status409Conflict,
-                ErrorCodes.Categories.InUse,
-                "取引に使われている分類は削除できません。");
+            throw CreateInUseException();
         }
 
         _db.Categories.Remove(data);
-        await _db.SaveChangesAsync();
+
+        // 確かめた直後に、別のリクエストがこの分類を取引に付けると、外部キーが削除を断る。
+        // そのときも 500 ではなく 409 にする
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        {
+            throw CreateInUseException();
+        }
     }
 
     #region // --- 内部処理 --- //
@@ -176,6 +183,19 @@ public class CategoryService
     {
         return await _db.Transactions
             .AnyAsync(t => t.UserId == _currentUser.Id && t.CategoryId == categoryId);
+    }
+
+    /// <summary>
+    /// 取引に使われているので消せない（409）
+    /// </summary>
+    private static AppException CreateInUseException()
+    {
+        return new AppException
+        (
+            StatusCodes.Status409Conflict,
+            ErrorCodes.Categories.InUse,
+            "取引に使われている分類は削除できません。"
+        );
     }
 
     public CategoryService(AppDbContext db, CurrentUser currentUser)

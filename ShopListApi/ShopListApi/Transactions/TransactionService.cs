@@ -140,14 +140,21 @@ public class TransactionService
         if (request.CategoryId.HasValue &&
             !await IsOwnedCategoryAsync(request.CategoryId.Value))
         {
-            throw new AppException(
-                StatusCodes.Status422UnprocessableEntity,
-                ErrorCodes.Categories.NotFound,
-                "分類が見つかりません。");
+            throw CreateCategoryNotFoundException();
         }
 
         ApplyUpdate(transaction, request);
-        await _db.SaveChangesAsync();
+
+        // 確かめた直後に、別のリクエストがその分類を消すと、外部キーが更新を断る。
+        // そのときも 500 ではなく 422 にする
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        {
+            throw CreateCategoryNotFoundException();
+        }
     }
 
     /// <summary>
@@ -227,6 +234,19 @@ public class TransactionService
         transaction.Date = request.Date!.Value;
         transaction.Type = request.Type!.Value;
         transaction.CategoryId = request.CategoryId;
+    }
+
+    /// <summary>
+    /// 指定された分類が無い（422）
+    /// </summary>
+    private static AppException CreateCategoryNotFoundException()
+    {
+        return new AppException
+        (
+            StatusCodes.Status422UnprocessableEntity,
+            ErrorCodes.Categories.NotFound,
+            "分類が見つかりません。"
+        );
     }
 
     public TransactionService(AppDbContext db, CurrentUser currentUser)
