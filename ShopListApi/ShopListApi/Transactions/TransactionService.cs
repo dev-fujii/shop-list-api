@@ -5,7 +5,7 @@ using ShopListApi.Data;
 namespace ShopListApi.Transactions;
 
 /// <summary>
-/// 取引の処理（作成・1件）
+/// 取引の処理（一覧・1件・作成・更新・削除）
 /// 今のユーザーの取引だけを扱う
 /// </summary>
 public class TransactionService
@@ -75,11 +75,17 @@ public class TransactionService
     }
 
     /// <summary>
-    /// 指定されたページの取引取得
+    /// 分類・期間で絞り、指定されたページの取引を取得する
     /// </summary>
-    public async Task<PagedResponse<TransactionResponse>> GetAllAsync(int page, int pageSize)
+    public async Task<PagedResponse<TransactionResponse>> GetAllAsync(
+        int page,
+        int pageSize,
+        int? categoryId = null,
+        DateOnly? from = null,
+        DateOnly? to = null)
     {
         var query = _db.Transactions.Where(t => t.UserId == _currentUser.Id);
+        query = ApplyFilters(query, categoryId, from, to);
 
         return new PagedResponse<TransactionResponse>
         (
@@ -117,7 +123,111 @@ public class TransactionService
          );
     }
 
+    /// <summary>
+    /// 自分の取引を更新する。取引が無ければ404、指定した分類が自分のものでなければ422
+    /// </summary>
+    public async Task UpdateAsync(int id, UpdateTransactionRequest request)
+    {
+        var transaction = await FindOwnedTransactionAsync(id);
+        if (transaction is null)
+        {
+            throw new AppException(
+                StatusCodes.Status404NotFound,
+                ErrorCodes.Transactions.NotFound,
+                "取引が見つかりません。");
+        }
+
+        if (request.CategoryId.HasValue &&
+            !await IsOwnedCategoryAsync(request.CategoryId.Value))
+        {
+            throw new AppException(
+                StatusCodes.Status422UnprocessableEntity,
+                ErrorCodes.Categories.NotFound,
+                "分類が見つかりません。");
+        }
+
+        ApplyUpdate(transaction, request);
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// 自分の取引を完全に削除する。無い・他人の取引なら404
+    /// </summary>
+    public async Task DeleteAsync(int id)
+    {
+        var transaction = await FindOwnedTransactionAsync(id);
+        if (transaction is null)
+        {
+            throw new AppException(
+                StatusCodes.Status404NotFound,
+                ErrorCodes.Transactions.NotFound,
+                "取引が見つかりません。");
+        }
+
+        _db.Transactions.Remove(transaction);
+        await _db.SaveChangesAsync();
+    }
+
     #region // --- 内部処理 --- //
+
+    /// <summary>
+    /// 指定された分類・開始日・終了日で絞り込む。null の項目では絞り込まない
+    /// </summary>
+    private static IQueryable<Transaction> ApplyFilters
+    (
+        IQueryable<Transaction> query,
+        int? categoryId,
+        DateOnly? from,
+        DateOnly? to
+    )
+    {
+        if (from.HasValue)
+        {
+            query = query.Where(t => t.Date >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(t => t.Date <= to.Value);
+        }
+
+        if (categoryId.HasValue)
+        {
+            query = query.Where(t => t.CategoryId == categoryId.Value);
+        }
+
+        return query;
+    }
+
+    /// <summary>
+    /// 今のユーザーの取引を ID で探す。無い・他人の取引なら null
+    /// </summary>
+    private async Task<Transaction?> FindOwnedTransactionAsync(int id)
+    {
+        return await _db.Transactions
+            .FirstOrDefaultAsync(t => t.Id == id && t.UserId == _currentUser.Id);
+    }
+
+    /// <summary>
+    /// 指定IDの分類が、今のユーザーの分類として存在するか
+    /// </summary>
+    private async Task<bool> IsOwnedCategoryAsync(int categoryId)
+    {
+        return await _db.Categories
+            .AnyAsync(c => c.Id == categoryId && c.UserId == _currentUser.Id);
+    }
+
+    /// <summary>
+    /// リクエストの内容で取引を書き換える（入力元は変えない）
+    /// </summary>
+    private static void ApplyUpdate(Transaction transaction, UpdateTransactionRequest request)
+    {
+        transaction.Amount = request.Amount!.Value;
+        transaction.Merchant = request.Merchant;
+        transaction.Date = request.Date!.Value;
+        transaction.Type = request.Type!.Value;
+        transaction.CategoryId = request.CategoryId;
+    }
 
     public TransactionService(AppDbContext db, CurrentUser currentUser)
     {

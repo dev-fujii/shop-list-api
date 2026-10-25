@@ -16,7 +16,14 @@ public class TransactionsController : ControllerBase
     /// GET /transactions: 自分の取引の一覧（日付の新しい順。同じ日付は id の大きい順）
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PagedResponse<TransactionResponse>>> GetAll(int page = 1, int? pageSize = null)
+    public async Task<ActionResult<PagedResponse<TransactionResponse>>> GetAll
+    (
+        int page = 1,
+        int? pageSize = null,
+        int? categoryId = null,
+        DateOnly? from = null,
+        DateOnly? to = null
+    )
     {
         // --- バリデーションチェック --- //
 
@@ -36,7 +43,20 @@ public class TransactionsController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var transactions = await _transactionService.GetAllAsync(page, actualPageSize);
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+        {
+            ModelState.AddModelError(nameof(from), "from は to 以前の日付で指定してください。");
+            return ValidationProblem(ModelState);
+        }
+
+        var transactions = await _transactionService.GetAllAsync
+        (
+            page,
+            actualPageSize,
+            categoryId,
+            from,
+            to
+        );
         return Ok(transactions);
     }
 
@@ -59,6 +79,26 @@ public class TransactionsController : ControllerBase
 
         // 201 と、Location: /transactions/{id} を返す
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// PUT /transactions/{id}: 自分の取引を更新する（204）
+    /// </summary>
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, UpdateTransactionRequest request)
+    {
+        await _transactionService.UpdateAsync(id, request);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// DELETE /transactions/{id}: 自分の取引を削除する（204）
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        await _transactionService.DeleteAsync(id);
+        return NoContent();
     }
 
     #region // --- 内部処理 --- //

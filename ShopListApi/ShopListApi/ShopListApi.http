@@ -1,5 +1,8 @@
 @ShopListApi_HostAddress = http://localhost:5247
 
+# 32は設定変更専用
+# 「無いID」の999は、実際に存在しないことを確認して使う
+
 # ---------- 分類 ----------
 
 ### 1. 分類の一覧
@@ -94,7 +97,7 @@ GET {{ShopListApi_HostAddress}}/nothing
 Accept: application/json
 
 # ---------- 取引の登録・入力チェック ----------
-# 取引の削除はまだ無いので、送るたびに DB に取引が残る
+# POSTを送るたびに取引が増える。不要な取引は47のように削除する
 
 ### 16. 取引を登録する・全部の項目あり（201 と Location が返る）
 # @name lawson
@@ -218,4 +221,132 @@ Accept: application/json
 
 ### 32. 設定で変更した上限を超える（試験用の上限2なら400。通常の上限100なら200）
 GET {{ShopListApi_HostAddress}}/transactions?pageSize=3
+Accept: application/json
+
+# ---------- 取引の更新・削除・絞り込み ----------
+# 33・34で作る専用データだけを更新・削除する。既存のローソン・自動販売機は残す
+# 33の分類名が重複したら前回のデータを確認する
+
+### 33. 確認用の分類を作る（201）
+# @name exerciseCategory
+POST {{ShopListApi_HostAddress}}/categories
+Content-Type: application/json
+
+{
+  "name": "確認用"
+}
+
+### 34. 確認用の取引を作る（201。source は manual）
+# @name exerciseTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+Content-Type: application/json
+
+{
+  "amount": 1000,
+  "merchant": "確認用",
+  "date": "2026-10-20",
+  "type": "expense",
+  "source": "manual"
+}
+
+### 35. 取引を更新する（204）
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 1500,
+  "merchant": "更新後",
+  "date": "2026-10-21",
+  "type": "income",
+  "categoryId": {{exerciseCategory.response.body.$.id}}
+}
+
+### 36. 更新後の取引を取得する（200。35の内容が反映され、source は manual のまま）
+# 41〜43のエラーのあとも再送し、35の値から変わっていないことを確認する
+GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Accept: application/json
+
+### 37. 分類で絞り込む（200。items と totalCount は、この分類の取引だけ）
+GET {{ShopListApi_HostAddress}}/transactions?categoryId={{exerciseCategory.response.body.$.id}}&pageSize=1
+Accept: application/json
+
+### 38. 同じ開始日・終了日で絞る（200。10月21日の取引だけ）
+GET {{ShopListApi_HostAddress}}/transactions?from=2026-10-21&to=2026-10-21
+Accept: application/json
+
+### 39. 開始日が終了日より後（400。errors に from）
+GET {{ShopListApi_HostAddress}}/transactions?from=2026-10-22&to=2026-10-21
+Accept: application/json
+
+### 40. 存在しない日付（400。ASP.NET Core の入力チェック）
+GET {{ShopListApi_HostAddress}}/transactions?from=2026-02-30
+Accept: application/json
+
+### 41. 無い分類に変更する（422 category.not_found。取引は変更されない）
+# 分類ID 999 が存在しないことを確認してから送る
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 9999,
+  "merchant": "変更されないはず",
+  "date": "2026-10-22",
+  "type": "expense",
+  "categoryId": 999
+}
+
+### 42. 金額0で更新する（400。取引は変更されない）
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 0,
+  "merchant": "変更されないはず",
+  "date": "2026-10-22",
+  "type": "expense",
+  "categoryId": null
+}
+
+### 43. 無い取引を更新する（404 transaction.not_found）
+PUT {{ShopListApi_HostAddress}}/transactions/999
+Content-Type: application/json
+
+{
+  "amount": 1500,
+  "merchant": "確認用",
+  "date": "2026-10-21",
+  "type": "income",
+  "categoryId": null
+}
+
+### 44. 使用中の分類を削除する（409 category.in_use）
+DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
+Accept: application/json
+
+### 45. 取引を未分類に変更する（204。36を再送すると categoryId は null）
+PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "amount": 1500,
+  "merchant": "更新後",
+  "date": "2026-10-21",
+  "type": "income",
+  "categoryId": null
+}
+
+### 46. 使われなくなった分類を削除する（204）
+DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
+Accept: application/json
+
+### 47. 取引を削除する（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Accept: application/json
+
+### 48. 削除した取引を取得する（404 transaction.not_found）
+GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
+Accept: application/json
+
+### 49. 同じ取引をもう一度削除する（404 transaction.not_found）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
 Accept: application/json
