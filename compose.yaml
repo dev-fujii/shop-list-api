@@ -1,0 +1,60 @@
+# API と DB をまとめて起動する（docker compose up）
+# ${...} の値は、同じフォルダーの .env から読む（パスワードを含むので git には入れない）
+
+services:
+  # --- DB: PostgreSQL --- #
+  db:
+    image: postgres:17
+
+    container_name: kakeibo-db
+
+    # Docker が起動したら自動で起動する（docker compose stop で止めたときは起動しない）
+    restart: unless-stopped
+
+    ports:
+      # 左: PC 側（手元の開発でもこのポートにつなぐ） / 右: コンテナの中（PostgreSQL は 5432 で待ち受ける）
+      - "${POSTGRES_PORT}:5432"
+
+    environment:
+      # DB を初めて作るときに使われる、ユーザー・パスワード・DB 名
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      # データはコンテナの外（ボリューム）に置く。コンテナを消しても残る
+      - kakeibo-db-data:/var/lib/postgresql/data
+
+    # DB が接続を受け付けられるようになったかを確かめる。api はこれを待ってから起動する
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- API: ShopListApi --- #
+  api:
+    # Dockerfile があるフォルダーからイメージを作る
+    build:
+      context: ./ShopListApi/ShopListApi
+
+    container_name: kakeibo-api
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      # appsettings の ConnectionStrings:DefaultConnection と同じ。入れ子は __ でつなぐ
+      # Host は compose のサービス名 db、Port はコンテナの中の 5432
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+
+    ports:
+      # 左: PC 側（.env の API_PORT。無ければ 8080） / 右: コンテナの中（ASP.NET Core の既定の 8080）
+      - "${API_PORT:-8080}:8080"
+
+volumes:
+  # DB のデータの置き場所。compose では作らず、先に作っておいたものを使う
+  # 初めて使うときは docker volume create kakeibo-db-data で作る
+  kakeibo-db-data:
+    external: true
