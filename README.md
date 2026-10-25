@@ -4,7 +4,7 @@
 Apple Pay で払うと、金額と店名だけが送られて記録されます。分類（食費・交通費など）は、自分で決めた分類ルールで自動で決まります。
 月ごと・分類ごとの集計も取れます。
 
-> 作っている途中です（2026-10-22 時点）。分類の API ができ、いまは取引を作っています。進み具合は「[進み具合と今後](#進み具合と今後)」を見てください。
+> 作っている途中です（2026-10-26 時点）。分類と取引の API ができ、Docker のイメージを Azure（Container Apps）に載せて公開しました。進み具合は「[進み具合と今後](#進み具合と今後)」を見てください。
 
 ## 作った理由
 
@@ -48,7 +48,40 @@ Apple Pay で払う
 | ASP.NET Core（コントローラー） | 業務ではコントローラーで書かれていることが多いと考えたため |
 | Entity Framework Core | .NET で DB を扱う標準的な方法のため |
 | PostgreSQL（手元は Docker） | Azure に縛られず、ほかのクラウドにも持っていけるため |
-| Azure App Service（予定） | Microsoft の公式ドキュメント（Microsoft Learn）を読みながら、.NET と同じ会社のクラウドに載せるため |
+| Docker（2段階のビルド） | 手元で動いたものと同じイメージを、そのまま Azure でも動かしたかったため。作る段と動かす段に分けて、本番のイメージには SDK とソースコードを入れないようにした |
+| GitHub Container Registry（GHCR） | イメージの置き場所。ソースと同じ GitHub に置けて、公開のイメージなら置くのも取ってくるのも無料のため |
+| Azure Container Apps | 作ったイメージをそのまま動かせて、Docker と Azure の両方を実際に使うことになるため。App Service の無料プラン（F1）と違って1日の使用時間の上限がなく、だれも呼ばないときはコンテナを0個まで減らせるので、無料枠に収まる |
+| Azure Database for PostgreSQL（Flexible Server） | 手元と同じ PostgreSQL 17 を使えて、12か月の無料枠があるため。手元と同じ DB なら、マイグレーションも同じように動く |
+
+## Azure での構成
+
+```text
+iPhone のショートカットなど
+  → HTTPS
+  → Azure Container Apps（入口で HTTPS を受ける。API が X-Api-Key の鍵を確かめる）
+  → Azure Database for PostgreSQL（Flexible Server。SSL で接続）
+
+イメージ: GitHub Container Registry（GHCR）の公開イメージを、Container Apps が取ってくる
+```
+
+- **地域**: API と DB は、どちらも Japan East に置いています。離れていると、API が DB とやりとりするたびに遅くなるためです。
+- **秘密の値**: DB の接続文字列と仮の鍵は、Container Apps の「シークレット」に入れ、環境変数（`ConnectionStrings__DefaultConnection`・`ApiKey__Key`）から参照しています。コード・イメージ・git には入れていません。
+- **入口**: `https://` だけを受け付けます。`http://` で来たリクエストは `https://` に転送されます。鍵が無い・違うリクエストは 401 で止めます。
+- **鍵が無いときは起動しない**: 鍵の設定が無いと、起動の時点で止まるようにしています（`ValidateOnStart`）。鍵を入れ忘れたまま公開してしまうことを防ぐためです。
+- **DB への接続**: パブリック アクセスで、「Azure サービスからのアクセス」と、マイグレーションを当てる PC の IP アドレスだけを通しています。Container Apps の従量課金プランは外へ出るときの IP アドレスが決まっていないため、無料で済ませるにはこの方法になります。その分、DB のパスワードは長いランダムな値にしています。
+- **マイグレーション**: 移行バンドル（`dotnet ef migrations bundle` で作る実行ファイル）で当てています。公式ドキュメントが、公開する DB に流すやり方として勧めているためです。
+
+### 無料に収めるための設定
+
+| どこ | 設定 | 理由 |
+| --- | --- | --- |
+| PostgreSQL | Burstable B1ms・ストレージ 32GB | 12か月の無料枠（B1ms を月750時間・32GB）に収める |
+| PostgreSQL | ストレージの自動拡張・高可用性・Geo 冗長はオフ | オンにすると、容量や予備のサーバーが増えて料金がかかる |
+| Container Apps | 従量課金（Consumption）だけ・0.25 CPU・0.5 GiB | 毎月の無料枠（18万 vCPU秒・36万 GiB秒・200万リクエスト）を長く使える |
+| Container Apps | レプリカは最小 0・最大 1 | だれも呼ばないときは0個になり、料金がかからない。急に呼ばれても1個までしか増えない |
+| Container Apps | ログを保存しない | Log Analytics（ログの保存先）を作らない。今のログはログ ストリームで見られる |
+
+公開している URL は、この README には載せていません。鍵の無いリクエストでもコンテナは起動するので、だれでも呼べる場所に書くと、無料枠を使い切るおそれがあるためです。
 
 ## 設計で決めたこと
 
@@ -75,14 +108,58 @@ Apple Pay で払う
 
 ## 動かし方
 
-準備中です。コードを書いたら追記します。
+### 手元（Docker Compose）
+
+Docker Desktop を起動してから、リポジトリの一番上のフォルダーで実行します。
+
+1. `.env.example` をコピーして `.env` を作り、パスワードと仮の鍵を書き換えます（`.env` は git に入れません）。
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+2. DB のデータを置くボリュームを作ります（初めてのときだけ）。
+
+   ```powershell
+   docker volume create kakeibo-db-data
+   ```
+
+3. API と DB を起動します。
+
+   ```powershell
+   docker compose up --build -d
+   ```
+
+4. 表を作ります（初めてのときだけ）。`ShopListApi/ShopListApi` のフォルダーで、`.env` に書いた値に合わせて実行します。
+
+   ```powershell
+   dotnet ef database update --connection "Host=localhost;Port=5433;Database=kakeibo;Username=postgres;Password=（.env の POSTGRES_PASSWORD）"
+   ```
+
+5. 呼んで確かめます。鍵が無ければ 401、`.env` の `API_KEY` を付ければ 200 が返ります。
+
+   ```powershell
+   curl.exe -i http://localhost:8080/categories
+   curl.exe -i -H "X-Api-Key: （.env の API_KEY）" http://localhost:8080/categories
+   ```
+
+   ポートは `.env` の `API_PORT`（書かなければ 8080）です。
+
+### Azure（Container Apps）に載せる流れ
+
+1. イメージを作り、GHCR に push します（タグは commit の番号にして、どのコードが動いているか分かるようにします）。
+2. Azure に PostgreSQL（Flexible Server）を作り、移行バンドルで表を作ります。
+3. Container Apps の環境とアプリを作り、GHCR のイメージを指定します。
+4. シークレットに接続文字列と仮の鍵を入れ、環境変数から参照する新しいリビジョンを作ります。
+5. 発行された URL で、鍵なしは 401、鍵ありは 200 になることを確かめます。
 
 ## 進み具合と今後
 
 - [x] 要件定義（[docs/要件定義.md](docs/要件定義.md)）
 - [x] 設計（[docs/設計.md](docs/設計.md)）
 - [ ] 手元版: 取引・分類・分類ルールと自動分類・集計・入力チェック（2026-11-05 目標）
-- [ ] Azure App Service に公開する（11月中）。ログインを足すまでは、決まった鍵を付けた呼び出しだけを受け付ける
+- [x] Docker のイメージを Azure Container Apps に載せて公開する（2026-10-26）。ログインを足すまでは、決まった鍵を付けた呼び出しだけを受け付ける
+- [ ] iPhone のショートカットから記録する
 - [ ] GitHub Actions で、push したら自動でテストを回す
 - [ ] アカウント作成とログイン（ASP.NET Core Identity）
 
