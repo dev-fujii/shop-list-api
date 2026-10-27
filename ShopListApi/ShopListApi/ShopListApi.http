@@ -596,3 +596,182 @@ Accept: application/json
 GET {{ShopListApi_HostAddress}}/categories
 X-Api-Key: 
 Accept: application/json
+
+# ---------- 分類ルール・自動分類（穴埋め後、ローカルで72から順に実行） ----------
+# 事前に AddCategoryRules をローカルDBに適用する。
+# 他人のルールが見えない・他人の分類を使えない確認は、仮ユーザー固定のため別途必要。
+# 以下の固有名・キーワードと同じデータが残っていないことを確かめる。
+
+### 72. 自動分類用の分類Aを作る（201）
+# @name ruleCategoryA
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "穴埋め確認A" }
+
+### 73. 自動分類用の分類Bを作る（201）
+# @name ruleCategoryB
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "穴埋め確認B" }
+
+### 74. 短いキーワードのルールを作る（201とLocation）
+# @name shortRule
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋め", "categoryId": {{ruleCategoryA.response.body.$.id}} }
+
+### 75. 長いキーワードのルールを後から作る（201）
+# @name longRule
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋めスーパー", "categoryId": {{ruleCategoryB.response.body.$.id}} }
+
+### 76. 同じキーワードを登録（409 category_rule.duplicate_keyword）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋め", "categoryId": {{ruleCategoryB.response.body.$.id}} }
+
+### 77. 無い分類を指定（422 category.not_found。999が無いことを確認する）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋め不存在", "categoryId": 999 }
+
+### 78. 無い分類かつキーワード重複（ひな形では分類を先に確認し422）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋め", "categoryId": 999 }
+
+### 79. 空白だけのキーワード（400）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "   ", "categoryId": {{ruleCategoryA.response.body.$.id}} }
+
+### 80. 51文字のキーワード（400）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "123456789012345678901234567890123456789012345678901", "categoryId": {{ruleCategoryA.response.body.$.id}} }
+
+### 81. 分類IDを送らない（400）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋め分類なし" }
+
+### 82. 作ったルールを1件取得（200）
+GET {{ShopListApi_HostAddress}}/category-rules/{{shortRule.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 83. 無いルール（404 category_rule.not_found。999が無いことを確認する）
+GET {{ShopListApi_HostAddress}}/category-rules/999
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 84. 一覧の2ページ目（200。id昇順・1件、totalCountは自分の全ルール件数）
+GET {{ShopListApi_HostAddress}}/category-rules?page=2&pageSize=1
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 85. page=0（400）
+GET {{ShopListApi_HostAddress}}/category-rules?page=0
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 86. pageSize=0（400）
+GET {{ShopListApi_HostAddress}}/category-rules?pageSize=0
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 87. とても大きなページ（200。itemsが空、totalCountは変わらない）
+GET {{ShopListApi_HostAddress}}/category-rules?page=2147483647&pageSize=1
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+### 88. 複数一致は長い方（201。categoryIdは分類B）
+# @name longMatchTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "駅前穴埋めスーパー本店", "source": "manual" }
+
+### 89. 一致なし（201。categoryIdはnull。他の既存ルールにも当たらない店名で試す）
+# @name noMatchTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "一致なし確認ZXQ", "source": "auto" }
+
+### 90. 同じ長さのルールを作る（201。先に作った方は分類B）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋めAB", "categoryId": {{ruleCategoryB.response.body.$.id}} }
+
+### 91. 同じ長さのルールを後から作る（201。後の方は分類A）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "穴埋めCD", "categoryId": {{ruleCategoryA.response.body.$.id}} }
+
+### 92. 同じ長さなら先に作った方（201。categoryIdは分類B）
+# @name tieMatchTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "穴埋めAB-穴埋めCD店", "source": "auto" }
+
+### 93. 取引に使われる分類Bは消せない（409 category.in_use）
+DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryB.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 94. 後片付け: 長い方に一致した取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{longMatchTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 95. 後片付け: 一致なしの取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{noMatchTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 96. 後片付け: 同じ長さの確認用取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{tieMatchTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 97. 分類Aを消す（204。分類Aを指すルールも連動削除）
+DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryA.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 98. 分類Aを指していたルールも消えている（404）
+GET {{ShopListApi_HostAddress}}/category-rules/{{shortRule.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 99. 分類Bを消す（204。分類Bを指すルールも連動削除）
+DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryB.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 100. 分類Bを指していたルールも消えている（404）
+GET {{ShopListApi_HostAddress}}/category-rules/{{longRule.response.body.$.id}}
+X-Api-Key: {{ApiKey}}

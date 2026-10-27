@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShopListApi.Common;
+using ShopListApi.CategoryRules;
 using ShopListApi.Data;
 
 namespace ShopListApi.Transactions;
@@ -17,9 +18,19 @@ public class TransactionService
     /// </summary>
     public async Task<TransactionResponse> CreateAsync(CreateTransactionRequest request)
     {
+        // 他人のルールを使わないように、今のユーザーのものだけ取得する。
+        var rules = await _db.CategoryRules
+            .AsNoTracking()
+            .Where(r => r.UserId == _currentUser.Id)
+            .ToListAsync();
+
+        // 店名に一致するルールから分類を決める。一致が無ければ未分類にする。
+        var categoryId = CategoryRuleMatcher.FindCategoryId(request.Merchant, rules);
+
         var transaction = new Transaction
         {
             UserId = _currentUser.Id,
+            CategoryId = categoryId,
             Amount = request.Amount!.Value,
             Merchant = request.Merchant,
             Date = request.Date ?? GetTodayInJapan(),
@@ -28,7 +39,18 @@ public class TransactionService
         };
 
         _db.Transactions.Add(transaction);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        {
+            // 判定の直後に行き先の分類が消されると、外部キーに断られる。
+            // そのルールも Cascade で一緒に消えているので、当たるルールが無いときと同じく未分類で保存する。
+            // 呼ぶ側は分類を送っていないので、エラーにすると支払いの記録だけが失われるため
+            transaction.CategoryId = null;
+            await _db.SaveChangesAsync();
+        }
 
         return new TransactionResponse
         {
@@ -86,19 +108,23 @@ public class TransactionService
     {
         var query = _db.Transactions.Where(t => t.UserId == _currentUser.Id);
         query = ApplyFilters(query, categoryId, from, to);
+        var totalCount = await query.CountAsync();
 
-        return new PagedResponse<TransactionResponse>
-        (
-            await query
-            
+        // 大きなページ番号でも掛け算があふれないよう、先に long にする（分類ルールの一覧と同じ）
+        var skip = ((long)page - 1) * pageSize;
+        var items = new List<TransactionResponse>();
+        if (skip < totalCount)
+        {
+            items = await query
+
                 //新しい日付順に
                 .OrderByDescending(t => t.Date)
 
                 //同じ日付ならIDの大きい順
                 .ThenByDescending(t => t.Id)
 
-                //指定ページより前の件数を飛ばす
-                .Skip((page - 1) * pageSize)
+                //指定ページより前の件数を飛ばす（skip は totalCount より小さいので int に収まる）
+                .Skip((int)skip)
 
                 //指定ページの分を、最大 pageSize 件取得する
                 .Take(pageSize)
@@ -116,11 +142,16 @@ public class TransactionService
                 })
 
                 // DBに問い合わせ、結果をリストにする
-                .ToListAsync(),
+                .ToListAsync();
+        }
+
+        return new PagedResponse<TransactionResponse>
+        (
+            items,
             page,
             pageSize,
-            await query.CountAsync()
-         );
+            totalCount
+        );
     }
 
     /// <summary>

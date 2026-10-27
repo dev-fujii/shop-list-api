@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- テスト実行用のパッケージ。.NET 10 の dotnet new mstest と同じく、MSTest のまとめパッケージを使う。 -->
+    <!-- 中に Test.Sdk・TestAdapter・TestFramework・アナライザーが入っている。 -->
+    <PackageReference Include="MSTest" Version="4.0.2" />
+    <!-- API側のDesignはPrivateAssetsなので、実行時のEF Coreの版をそろえる。 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <ProjectReference Include="../ShopListApi/ShopListApi.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
+using ShopListApi.CategoryRules;
 using ShopListApi.Common;
 using ShopListApi.Data;
 using ShopListApi.Transactions;
@@ -43,6 +44,9 @@ builder.Services.AddScoped<CategoryService>();
 
 // 取引の処理
 builder.Services.AddScoped<TransactionService>();
+
+// 分類ルールの処理
+builder.Services.AddScoped<CategoryRuleService>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();

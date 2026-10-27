@@ -137,7 +137,8 @@ public class CategoryService
     /// 無い・他人の分類なら404、取引に使われていれば409
     /// </summary>
     /// <remarks>
-    /// その分類を指す分類ルールも一緒に消す所は、分類ルールを作るときに足す。
+    /// 分類を削除すると、その分類を指すルールもDB側で連動削除される。
+    /// この動作は CategoryRuleConfiguration の OnDelete で定義する。
     /// </remarks>
     public async Task DeleteAsync(int id)
     {

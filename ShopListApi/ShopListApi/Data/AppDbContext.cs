@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
+using ShopListApi.CategoryRules;
 using ShopListApi.Transactions;
 
 namespace ShopListApi.Data;
@@ -23,6 +24,11 @@ public class AppDbContext : DbContext
     /// 表の名前（Transactions）は、このプロパティの名前から決まる。
     /// </remarks>
     public DbSet<Transaction> Transactions { get; set; } = null!;
+
+    /// <summary>
+    /// 分類ルールの表
+    /// </summary>
+    public DbSet<CategoryRule> CategoryRules { get; set; } = null!;
 
     #region // --- 内部処理 --- //
 
