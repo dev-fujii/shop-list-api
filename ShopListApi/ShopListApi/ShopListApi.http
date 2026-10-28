@@ -597,7 +597,7 @@ GET {{ShopListApi_HostAddress}}/categories
 X-Api-Key: 
 Accept: application/json
 
-# ---------- 分類ルール・自動分類（穴埋め後、ローカルで72から順に実行） ----------
+# ---------- 分類ルール・自動分類（ローカルで72から順に実行） ----------
 # 事前に AddCategoryRules をローカルDBに適用する。
 # 他人のルールが見えない・他人の分類を使えない確認は、仮ユーザー固定のため別途必要。
 # 以下の固有名・キーワードと同じデータが残っていないことを確かめる。
@@ -648,7 +648,7 @@ Content-Type: application/json
 
 { "keyword": "穴埋め不存在", "categoryId": 999 }
 
-### 78. 無い分類かつキーワード重複（ひな形では分類を先に確認し422）
+### 78. 無い分類かつキーワード重複（分類のエラーを優先し422）
 POST {{ShopListApi_HostAddress}}/category-rules
 X-Api-Key: {{ApiKey}}
 Content-Type: application/json
@@ -774,4 +774,157 @@ X-Api-Key: {{ApiKey}}
 
 ### 100. 分類Bを指していたルールも消えている（404）
 GET {{ShopListApi_HostAddress}}/category-rules/{{longRule.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+# ---------- 分類ルールの更新・削除（ローカルで101から順に実行） ----------
+# 72～100とは独立。ローカル環境を選び、以下の固有名の確認データが無い状態で開始する。
+# 2147483647が未使用のルールID・分類IDであることを事前に確認する。
+# 各レスポンスは見出しの期待値と自分で照合する（自動判定ではない）。
+# 他人のルール・分類の確認は、仮ユーザー固定のため別途必要。
+
+### 101. 更新・削除用の分類A（201）
+# @name editRuleCategoryA
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "ルール更新確認A" }
+
+### 102. 更新・削除用の分類B（201）
+# @name editRuleCategoryB
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "ルール更新確認B" }
+
+### 103. 更新するルールを作る（201）
+# @name editRuleTarget
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OLD", "categoryId": {{editRuleCategoryA.response.body.$.id}} }
+
+### 104. 重複確認用の別ルールを作る（201）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": {{editRuleCategoryA.response.body.$.id}} }
+
+### 105. 更新前のルールで取引を作る（201。categoryIdは分類A）
+# @name editRuleOldTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "RULE_EDIT_ZXQ_OLD", "source": "manual" }
+
+### 106. 同じキーワードのまま分類だけ変える（204。自分自身を重複扱いしない）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OLD", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
+
+### 107. 別ルールと同じキーワードに変える（409 category_rule.duplicate_keyword）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
+
+### 108. 無い分類かつ別ルールとキーワード重複（422 category.not_foundを優先）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": 2147483647 }
+
+### 109. 無いルールかつ無い分類（404 category_rule.not_foundを優先）
+PUT {{ShopListApi_HostAddress}}/category-rules/2147483647
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": 2147483647 }
+
+### 110. 空白だけのキーワード（400）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "   ", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
+
+### 111. 分類IDを送らない（400）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_NEW" }
+
+### 112. 51文字のキーワード（400）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "123456789012345678901234567890123456789012345678901", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
+
+### 113. 失敗した更新が保存されていない（200。OLDのまま、分類B）
+GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 114. キーワードと分類を変更する（204）
+PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "RULE_EDIT_ZXQ_NEW", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
+
+### 115. 更新結果を取得（200。keywordはNEW、categoryIdは分類B）
+GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 116. 更新前の取引は変わらない（200。categoryIdは分類Aのまま）
+GET {{ShopListApi_HostAddress}}/transactions/{{editRuleOldTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 117. 新しいキーワードで取引を作る（201。categoryIdは分類B）
+# @name editRuleNewTransaction
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "RULE_EDIT_ZXQ_NEW", "source": "manual" }
+
+### 118. ルールを削除（204。取引があってもルールは消せる）
+DELETE {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 119. 消したルールを取得（404 category_rule.not_found）
+GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 120. 消したルールをもう一度削除（404 category_rule.not_found）
+DELETE {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 121. ルールを消しても取引と分類は残る（200。categoryIdは分類B）
+GET {{ShopListApi_HostAddress}}/transactions/{{editRuleNewTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 122. 後片付け: 更新前に作った取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{editRuleOldTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 123. 後片付け: 更新後に作った取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{editRuleNewTransaction.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 124. 後片付け: 分類Aを消す（204。重複確認用のルールも連動削除）
+DELETE {{ShopListApi_HostAddress}}/categories/{{editRuleCategoryA.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 125. 後片付け: 分類Bを消す（204）
+DELETE {{ShopListApi_HostAddress}}/categories/{{editRuleCategoryB.response.body.$.id}}
 X-Api-Key: {{ApiKey}}

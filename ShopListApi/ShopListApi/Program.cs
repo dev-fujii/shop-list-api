@@ -4,6 +4,7 @@ using ShopListApi.CategoryRules;
 using ShopListApi.Common;
 using ShopListApi.Data;
 using ShopListApi.Transactions;
+using ShopListApi.Summaries;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -29,6 +30,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.Configure<PaginationOptions>(
 builder.Configuration.GetSection("Pagination"));
 
+builder.Services.AddOptions<SummaryOptions>()
+    .Bind(builder.Configuration.GetSection("Summary"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // (仮の鍵)ApiKey セクションから読む。
 builder.Services.AddOptions<ApiKeyOptions>()
     .Bind(builder.Configuration.GetSection("ApiKey"))
@@ -48,10 +54,28 @@ builder.Services.AddScoped<TransactionService>();
 // 分類ルールの処理
 builder.Services.AddScoped<CategoryRuleService>();
 
+// 集計の処理
+builder.Services.AddScoped<SummaryService>();
+
+// 初期分類を用意する処理
+builder.Services.AddScoped<CategoryInitializer>();
+
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();
 
 var app = builder.Build();
+
+// 初期分類の投入は専用コマンドで明示的に行い、Webサーバーは起動せず終了する。
+// 通常起動では、本人が削除・改名した初期分類を勝手に作り直さない。
+if (args.Contains("--initialize-categories", StringComparer.Ordinal))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var addedCount = await scope.ServiceProvider.GetRequiredService<CategoryInitializer>()
+        .InitializeAsync();
+    app.Logger.LogInformation("初期分類を{Count}件追加しました。", addedCount);
+    await app.DisposeAsync();
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

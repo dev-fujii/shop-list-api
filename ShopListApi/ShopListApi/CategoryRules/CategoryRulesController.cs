@@ -5,10 +5,10 @@ using ShopListApi.Common;
 namespace ShopListApi.CategoryRules;
 
 /// <summary>
-/// 分類ルールの一覧・1件取得・登録を受け付けるAPI。
+/// 分類ルールの一覧・1件取得・登録・更新・削除を受け付けるAPI。
 /// </summary>
 /// <remarks>
-/// データの取得・登録は CategoryRuleService に任せ、HTTPレスポンスの形を決める。
+/// データの操作は CategoryRuleService に任せ、HTTPレスポンスの形を決める。
 /// </remarks>
 [ApiController]
 [Route("category-rules")]
@@ -79,6 +79,29 @@ public class CategoryRulesController : ControllerBase
     {
         var created = await _categoryRuleService.CreateAsync(request);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+    }
+
+    /// <summary>
+    /// PUT /category-rules/{id}: 自分のルールを更新する。成功時は204。
+    /// </summary>
+    /// <remarks>
+    /// 入力形式400、ルール404、分類422、キーワード重複409の順に確認する。
+    /// </remarks>
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult> Update(int id, UpdateCategoryRuleRequest request)
+    {
+        await _categoryRuleService.UpdateAsync(id, request);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// DELETE /category-rules/{id}: 自分のルールを削除する。成功時204、無い場合404。
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    public async Task<ActionResult> Delete(int id)
+    {
+        await _categoryRuleService.DeleteAsync(id);
+        return NoContent();
     }
 
     #region // --- 内部処理 --- //

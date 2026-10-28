@@ -1,0 +1,211 @@
+@ShopListApi_HostAddress = http://localhost:5247
+
+# dev環境を選び、ローカルで1から順に実行する。
+# ApiKeyは既存のhttp-client.env.jsonを通して読み、ここには書かない。
+# 初期分類のコマンドはガイドを参照。初期6分類はこの確認では削除しない。
+# 2004年2月～4月に既存取引が無いこと、確認用店名に既存ルールが一致しないことを事前に確認する。
+# 各見出しの期待値とレスポンスを手動で照合する。
+
+### 1. 初期分類を確認（200。初期化コマンド実行後、初期6名が各1件ずつある）
+GET {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+
+### 2. 確認用分類A（201）
+# @name finishCategoryA
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "仕上げ確認A" }
+
+### 3. 確認用分類B（201）
+# @name finishCategoryB
+POST {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "name": "仕上げ確認B" }
+
+### 4. 部分一致する短いルール（201。分類A）
+POST {{ShopListApi_HostAddress}}/category-rules
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "keyword": "FINISH_ZXQ", "categoryId": {{finishCategoryA.response.body.$.id}} }
+
+### 5. 月初日の支出（201。100円、分類A）
+# @name finishExpense
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "FINISH_ZXQ_STORE", "date": "2004-02-01", "type": "expense", "source": "manual" }
+
+### 6. 未分類の支出（201。50円、categoryIdはnull）
+# @name finishUnclassified
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 50, "merchant": "FINISH_UNMATCHED_QZV", "date": "2004-02-15", "type": "expense", "source": "manual" }
+
+### 7. うるう年の月末日の収入（201。5000円、分類A）
+# @name finishIncome
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 5000, "merchant": "FINISH_ZXQ_SALARY", "date": "2004-02-29", "type": "income", "source": "manual" }
+
+### 8. 期間外の支出（201。2月の集計には含めない）
+# @name finishOutside
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 9999, "merchant": "FINISH_ZXQ_OUTSIDE", "date": "2004-03-01", "type": "expense", "source": "manual" }
+
+### 9. 分類をAからBへ手動変更（204。店名そのままのルールを作る）
+PUT {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "FINISH_ZXQ_STORE", "date": "2004-02-01", "type": "expense", "categoryId": {{finishCategoryB.response.body.$.id}} }
+
+### 10. ルール確認（200。短いFINISH_ZXQはAのまま、完全一致するSTOREのルールが1件できて分類B）
+GET {{ShopListApi_HostAddress}}/category-rules?pageSize=100
+X-Api-Key: {{ApiKey}}
+
+### 11. 同じ店の次の取引（201。200円、手で直した分類Bになる）
+# @name finishNextExpense
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 200, "merchant": "FINISH_ZXQ_STORE", "date": "2004-02-15", "type": "expense", "source": "manual" }
+
+### 12. 月の集計（200。from=02-01、to=02-29、支出350、収入5000、収支4650）
+# byCategoryは分類Bのexpense=300、分類Aのincome=5000、未分類のexpense=50。
+GET {{ShopListApi_HostAddress}}/summaries?month=2004-02
+X-Api-Key: {{ApiKey}}
+
+### 13. 期間指定の集計（200。12と同じ結果。両端の取引も含む）
+GET {{ShopListApi_HostAddress}}/summaries?from=2004-02-01&to=2004-02-29
+X-Api-Key: {{ApiKey}}
+
+### 14. 1日だけの集計（200。支出100、収入0、収支-100）
+GET {{ShopListApi_HostAddress}}/summaries?from=2004-02-01&to=2004-02-01
+X-Api-Key: {{ApiKey}}
+
+### 15. 取引が無い月（200。合計すべて0、byCategoryは空配列）
+GET {{ShopListApi_HostAddress}}/summaries?month=2004-04
+X-Api-Key: {{ApiKey}}
+
+### 16. 条件なし（200。日本時間の今月を含む3か月のfrom・toになっていること）
+GET {{ShopListApi_HostAddress}}/summaries
+X-Api-Key: {{ApiKey}}
+
+### 17. 月と期間を併用（400。errorsがある）
+GET {{ShopListApi_HostAddress}}/summaries?month=2004-02&from=2004-02-01&to=2004-02-29
+X-Api-Key: {{ApiKey}}
+
+### 18. 開始日だけ（400）
+GET {{ShopListApi_HostAddress}}/summaries?from=2004-02-01
+X-Api-Key: {{ApiKey}}
+
+### 19. 終了日だけ（400）
+GET {{ShopListApi_HostAddress}}/summaries?to=2004-02-29
+X-Api-Key: {{ApiKey}}
+
+### 20. 期間が逆（400）
+GET {{ShopListApi_HostAddress}}/summaries?from=2004-02-29&to=2004-02-01
+X-Api-Key: {{ApiKey}}
+
+### 21. 存在しない日付（400）
+GET {{ShopListApi_HostAddress}}/summaries?from=2004-02-30&to=2004-03-01
+X-Api-Key: {{ApiKey}}
+
+### 22. 存在しない月（400）
+GET {{ShopListApi_HostAddress}}/summaries?month=2004-13
+X-Api-Key: {{ApiKey}}
+
+### 23. 月の桁が不正（400）
+GET {{ShopListApi_HostAddress}}/summaries?month=2004-2
+X-Api-Key: {{ApiKey}}
+
+### 24. 同じ取引を分類Aに変更（204。同じ店名のルールを更新する）
+PUT {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "FINISH_ZXQ_STORE", "date": "2004-02-01", "type": "expense", "categoryId": {{finishCategoryA.response.body.$.id}} }
+
+### 25. 重複していない（200。完全一致するSTOREのルールは1件のまま、分類A）
+GET {{ShopListApi_HostAddress}}/category-rules?pageSize=100
+X-Api-Key: {{ApiKey}}
+
+### 26. 同じ店の新しい取引（201。300円、変更後の分類Aになる）
+# @name finishThirdExpense
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 300, "merchant": "FINISH_ZXQ_STORE", "date": "2004-02-20", "type": "expense", "source": "manual" }
+
+### 27. 分類は同じで店名だけ変更（204。新しい店名のルールは作らない）
+PUT {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "FINISH_ZXQ_NEWNAME", "date": "2004-02-01", "type": "expense", "categoryId": {{finishCategoryA.response.body.$.id}} }
+
+### 28. 未分類へ変更（204。nullの分類を持つルールは作らない）
+PUT {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ "amount": 100, "merchant": "FINISH_ZXQ_NEWNAME", "date": "2004-02-01", "type": "expense", "categoryId": null }
+
+### 29. ルール確認（200。NEWNAMEのルールなし、STOREのルールは分類Aのまま）
+GET {{ShopListApi_HostAddress}}/category-rules?pageSize=100
+X-Api-Key: {{ApiKey}}
+
+### 30. 過去の別取引は変わらない（200。11で作った取引の分類はBのまま）
+GET {{ShopListApi_HostAddress}}/transactions/{{finishNextExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 31. 更新後の取引を取得（200。NEWNAME、分類null、sourceはmanualのまま）
+GET {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 32. 後片付け: 最初の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 33. 後片付け: 未分類の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishUnclassified.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 34. 後片付け: 収入の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishIncome.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 35. 後片付け: 期間外の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishOutside.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 36. 後片付け: 2回目の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishNextExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 37. 後片付け: 3回目の取引（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{finishThirdExpense.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 38. 後片付け: 分類A（204。短いルールと学習したルールも連動削除）
+DELETE {{ShopListApi_HostAddress}}/categories/{{finishCategoryA.response.body.$.id}}
+X-Api-Key: {{ApiKey}}
+
+### 39. 後片付け: 分類B（204）
+DELETE {{ShopListApi_HostAddress}}/categories/{{finishCategoryB.response.body.$.id}}
+X-Api-Key: {{ApiKey}}

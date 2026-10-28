@@ -5,7 +5,7 @@ using ShopListApi.Data;
 namespace ShopListApi.CategoryRules;
 
 /// <summary>
-/// 分類ルールの一覧取得・1件取得・登録を行う。
+/// 分類ルールの一覧取得・1件取得・登録・更新・削除を行う。
 /// </summary>
 /// <remarks>
 /// 今のユーザーが所有するルールだけを扱う。
@@ -63,10 +63,12 @@ public class CategoryRuleService
 
         if (rule is null)
         {
-            throw new AppException(
+            throw new AppException
+            (
                 StatusCodes.Status404NotFound,
                 ErrorCodes.CategoryRules.NotFound,
-                "分類ルールが見つかりません。");
+                "分類ルールが見つかりません。"
+            );
         }
 
         return ToResponse(rule);
@@ -145,6 +147,112 @@ public class CategoryRuleService
         }
 
         return ToResponse(rule);
+    }
+
+    /// <summary>
+    /// 自分の分類ルールを更新する。既存の取引の分類は変更しない。
+    /// </summary>
+    /// <remarks>
+    /// 入力形式の検証後、ルール404 → 分類422 → 重複409の順に確認する。
+    /// </remarks>
+    public async Task UpdateAsync(int id, UpdateCategoryRuleRequest request)
+    {
+        // ID が合っていても、他人のルールは更新させない
+        var rule = await _db.CategoryRules
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == _currentUser.Id);
+
+        if (rule is null)
+        {
+            throw new AppException
+            (
+                StatusCodes.Status404NotFound,
+                ErrorCodes.CategoryRules.NotFound,
+                "分類ルールが見つかりません。"
+            );
+        }
+
+        // 自分の分類かを先に確認する。キーワードも重複していれば、分類のエラーを優先する
+        var ownsCategory = await _db.Categories.AnyAsync
+        (
+            c => c.UserId == _currentUser.Id &&
+            c.Id == request.CategoryId
+        );
+        if (!ownsCategory)
+        {
+            throw CreateCategoryNotFoundException();
+        }
+
+        // 自分自身を重複から除く。キーワードを変えずに更新できるようにするため
+        var duplicate = await _db.CategoryRules.AnyAsync
+        (
+            r => r.UserId == _currentUser.Id &&
+            r.Keyword == request.Keyword && 
+            r.Id != id
+        );
+
+        if (duplicate)
+        {
+            throw CreateDuplicateKeywordException();
+        }
+
+        // 入力の確認が済んだら、キーワードと分類を書き換える
+        rule.Keyword = request.Keyword;
+        // CategoryId は [Required] で検証済みなので、ここでは必ず値がある
+        rule.CategoryId = request.CategoryId!.Value;
+
+        try
+        {
+            // チェックが全部終わってから、最後に1回だけ書き込む
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        {
+            // 確かめた後に分類が削除された場合も、登録と同じ422にする。
+            throw CreateCategoryNotFoundException();
+        }
+        catch (DbUpdateException ex) when (ex.IsUniqueViolation())
+        {
+            // 並行した変更で分類も消えていたら、分類のエラーを優先する。
+            if
+            (
+                !await _db.Categories.AnyAsync
+                (
+                    c => c.Id == rule.CategoryId &&
+                    c.UserId == _currentUser.Id
+                )
+            )
+            {
+                throw CreateCategoryNotFoundException();
+            }
+
+            throw CreateDuplicateKeywordException();
+        }
+    }
+
+    /// <summary>
+    /// 自分の分類ルールを削除する。既存の取引は変更・削除しない。
+    /// </summary>
+    public async Task DeleteAsync(int id)
+    {
+        // 無い・他人のルールなら 404
+        var rule = await _db.CategoryRules
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == _currentUser.Id);
+
+        if (rule is null)
+        {
+            throw new AppException
+            (
+                StatusCodes.Status404NotFound,
+                ErrorCodes.CategoryRules.NotFound,
+                "分類ルールが見つかりません。"
+            );
+        }
+
+        // ルールだけを消す。分類や登録済みの取引は変えない
+        _db.CategoryRules.Remove(rule);
+
+        // 削除を DB に反映する
+        await _db.SaveChangesAsync();
     }
 
     #region // --- 内部処理 --- //

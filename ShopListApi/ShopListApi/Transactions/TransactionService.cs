@@ -33,7 +33,7 @@ public class TransactionService
             CategoryId = categoryId,
             Amount = request.Amount!.Value,
             Merchant = request.Merchant,
-            Date = request.Date ?? GetTodayInJapan(),
+            Date = request.Date ?? JapanTime.Today(),
             Source = request.Source!.Value,
             Type = request.Type ?? TransactionType.Expense
         };
@@ -76,12 +76,7 @@ public class TransactionService
         // 無い・他人の取引なら 404
         if (transaction is null)
         {
-            throw new AppException
-            (
-                StatusCodes.Status404NotFound,
-                ErrorCodes.Transactions.NotFound,
-                "取引が見つかりません。"
-            );
+            throw CreateTransactionNotFoundException();
         }
 
         return new TransactionResponse
@@ -99,12 +94,14 @@ public class TransactionService
     /// <summary>
     /// 分類・期間で絞り、指定されたページの取引を取得する
     /// </summary>
-    public async Task<PagedResponse<TransactionResponse>> GetAllAsync(
+    public async Task<PagedResponse<TransactionResponse>> GetAllAsync
+    (
         int page,
         int pageSize,
         int? categoryId = null,
         DateOnly? from = null,
-        DateOnly? to = null)
+        DateOnly? to = null
+    )
     {
         var query = _db.Transactions.Where(t => t.UserId == _currentUser.Id);
         query = ApplyFilters(query, categoryId, from, to);
@@ -155,17 +152,19 @@ public class TransactionService
     }
 
     /// <summary>
-    /// 自分の取引を更新する。取引が無ければ404、指定した分類が自分のものでなければ422
+    /// 自分の取引を更新する
+    /// 分類を手で変えたら、次回用の分類ルールも追加・更新する
     /// </summary>
+    /// <remarks>
+    /// 取引が無い・他人のものなら 404、指定した分類が無い・他人のものなら 422。
+    /// 未分類に戻す場合や、金額・店名だけを変える場合はルールを変更しない。
+    /// </remarks>
     public async Task UpdateAsync(int id, UpdateTransactionRequest request)
     {
         var transaction = await FindOwnedTransactionAsync(id);
         if (transaction is null)
         {
-            throw new AppException(
-                StatusCodes.Status404NotFound,
-                ErrorCodes.Transactions.NotFound,
-                "取引が見つかりません。");
+            throw CreateTransactionNotFoundException();
         }
 
         if (request.CategoryId.HasValue &&
@@ -174,16 +173,43 @@ public class TransactionService
             throw CreateCategoryNotFoundException();
         }
 
+        // 分類を書き換える前に、ルールを追加・更新するか決める
+        bool shouldLearn = request.CategoryId.HasValue &&
+            request.CategoryId.Value != transaction.CategoryId;
+
         ApplyUpdate(transaction, request);
 
-        // 確かめた直後に、別のリクエストがその分類を消すと、外部キーが更新を断る。
-        // そのときも 500 ではなく 422 にする
+        // 取引とルールは、最後にまとめて書き込む。片方だけ更新されるのを防ぐため
+        CategoryRule? learnedRule = null;
+        if (shouldLearn)
+        {
+            learnedRule = await PrepareLearnedRuleAsync(transaction);
+        }
+
         try
         {
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (learnedRule is not null && IsLearnedRuleConflict(ex))
+            {
+                // 同じ店名のルールが同時に登録・削除された場合は、ルールを探し直して準備し直す。
+                // 失敗した保存は取引の更新もロールバックされるので、両方まとめて1回だけ保存し直す（無限に再試行しない）
+                _db.Entry(learnedRule).State = EntityState.Detached;
+                await PrepareLearnedRuleAsync(transaction);
+                await _db.SaveChangesAsync();
+            }
+        }
+        catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(e => e.Entity is Transaction))
+        {
+            // 確かめた直後に、別のリクエストが取引そのものを消すと、更新が0行になる。そのときは 404 にする
+            throw CreateTransactionNotFoundException();
         }
         catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
         {
+            // 確かめた直後に、別のリクエストがその分類を消すと、外部キーが更新を断る。
+            // そのときも 500 ではなく 422 にする
             throw CreateCategoryNotFoundException();
         }
     }
@@ -196,10 +222,7 @@ public class TransactionService
         var transaction = await FindOwnedTransactionAsync(id);
         if (transaction is null)
         {
-            throw new AppException(
-                StatusCodes.Status404NotFound,
-                ErrorCodes.Transactions.NotFound,
-                "取引が見つかりません。");
+            throw CreateTransactionNotFoundException();
         }
 
         _db.Transactions.Remove(transaction);
@@ -207,6 +230,65 @@ public class TransactionService
     }
 
     #region // --- 内部処理 --- //
+
+    /// <summary>
+    /// 更新後の店名と分類から、ルールの追加・更新を準備する
+    /// </summary>
+    /// <remarks>
+    /// 保存は呼び出し元で、取引の更新とまとめて行う
+    /// </remarks>
+    /// <returns>追加するルール、または分類を書き換えた既存のルール</returns>
+    private async Task<CategoryRule> PrepareLearnedRuleAsync(Transaction transaction)
+    {
+        // ルールには分類が必須なので、値があることをここでも確認する
+        if (!transaction.CategoryId.HasValue)
+        {
+            throw new InvalidOperationException("ルール作成には分類IDが必要です。");
+        }
+
+        // 自分のルールから、店名とキーワードが同じものを探す
+        var rule = await _db.CategoryRules.FirstOrDefaultAsync
+        (
+            r => r.UserId == _currentUser.Id &&
+            r.Keyword == transaction.Merchant
+        );
+
+        if (rule is null)
+        {
+            var newRule = new CategoryRule
+            {
+                // 更新後の店名と分類で、自分のルールを作る
+                UserId = _currentUser.Id,
+                Keyword = transaction.Merchant,
+                CategoryId = transaction.CategoryId.Value
+            };
+
+            // 追加するルールを用意する。保存は呼び出し元で取引と一緒に行う
+            _db.CategoryRules.Add(newRule);
+            return newRule;
+        }
+
+        // 同じキーワードがあれば、増やさずに分類を変える
+        rule.CategoryId = transaction.CategoryId.Value;
+        return rule;
+    }
+
+    /// <summary>
+    /// 保存の失敗が、学習のルールと別のリクエストとの衝突によるものか
+    /// </summary>
+    /// <remarks>
+    /// 同じ店名のルールが先に登録された（一意違反）か、書き換えようとしたルールが消されていた（更新が0行）場合
+    /// </remarks>
+    private static bool IsLearnedRuleConflict(DbUpdateException ex)
+    {
+        if (ex.IsUniqueViolation())
+        {
+            return true;
+        }
+
+        return ex is DbUpdateConcurrencyException &&
+            ex.Entries.All(e => e.Entity is CategoryRule);
+    }
 
     /// <summary>
     /// 指定された分類・開始日・終了日で絞り込む。null の項目では絞り込まない
@@ -268,6 +350,19 @@ public class TransactionService
     }
 
     /// <summary>
+    /// 取引が無い・他人のもの（404）
+    /// </summary>
+    private static AppException CreateTransactionNotFoundException()
+    {
+        return new AppException
+        (
+            StatusCodes.Status404NotFound,
+            ErrorCodes.Transactions.NotFound,
+            "取引が見つかりません。"
+        );
+    }
+
+    /// <summary>
     /// 指定された分類が無い（422）
     /// </summary>
     private static AppException CreateCategoryNotFoundException()
@@ -285,24 +380,6 @@ public class TransactionService
         _db = db;
         _currentUser = currentUser;
     }
-
-    /// <summary>
-    /// 日本時間の今日
-    /// </summary>
-    /// <remarks>
-    /// サーバーの時計（Azure では UTC のことが多い）に頼らず、UTC の今を日本時間に変えてから日付を取る。
-    /// </remarks>
-    private static DateOnly GetTodayInJapan()
-    {
-        var japanNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, JapanTimeZone);
-        return DateOnly.FromDateTime(japanNow);
-    }
-
-    /// <summary>
-    /// 日本のタイムゾーン。
-    /// "Asia/Tokyo" は Windows でも Linux（Docker・Azure）でも使える名前
-    /// </summary>
-    private static readonly TimeZoneInfo JapanTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
 
     private readonly AppDbContext _db;
     private readonly CurrentUser _currentUser;
