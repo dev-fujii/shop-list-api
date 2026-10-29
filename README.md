@@ -5,7 +5,7 @@
 月や期間を指定し、分類別の合計・収入・支出・収支も取得できます。
 Apple Pay の決済時に、iPhone のショートカットから自動送信する動きは確認中です。
 
-> 2026-10-29 時点：分類ルールの更新・削除、初期分類の投入、手動変更からのルール作成、集計まで実装し、Azure に反映しています。手元のビルドは警告・エラーともに0件、自動テスト14件は成功し、GitHub Actions の CI も成功しています。
+> 2026-10-29 時点：分類ルールの更新・削除、初期分類の投入、手動変更からのルール作成、集計まで実装し、Azure に反映しています。手元のビルドは警告・エラーともに0件、自動テスト33件（DBを使わない14件・DB統合19件）は成功しています。統合テストを含む CI の設定を追加し、GitHub 上での実行確認は push 後に行います。
 >
 > Azure（Container Apps）では、初期分類の投入・再実行、月指定の集計、分類の変更からルールを作って次の取引を自動分類する動き、分類ルールの更新・削除を確認しています。iPhone のショートカットの手動実行による保存・自動分類も確認済みです。決済時の自動送信は確認中です。
 
@@ -214,10 +214,10 @@ dotnet run --project ShopListApi/ShopListApi/ShopListApi.csproj -- --initialize-
 
 ### 自動テスト
 
-リポジトリの一番上のフォルダーで実行します。
+リポジトリの一番上のフォルダーで実行します。DB を使わない14件だけを動かす場合は、次のように指定します。
 
 ```powershell
-dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj
+dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj --filter "TestCategory!=Integration"
 ```
 
 DB を使わない自動テストは14件です。分類の判定4件と、集計の期間・条件10件を確認します。
@@ -237,24 +237,60 @@ DB を使わない自動テストは14件です。分類の判定4件と、集�
 - 不正な年月、月と期間の併用、不完全な期間、日付の逆転の拒否
 - 条件なし、月指定、開始日と終了日の指定を受け付けること
 
-API と DB を通した確認は、[ShopListApi.http](ShopListApi/ShopListApi/ShopListApi.http) と [家計仕上げ.http](ShopListApi/ShopListApi/家計仕上げ.http) から手動で行います。前者の101～125は分類ルールの更新・削除、後者の1～39は初期分類の確認・手動変更からのルール作成・集計の確認です。Visual Studio の HTTP エディターでは `dev` 環境を選びます。
+#### PostgreSQLを使う統合テスト（19件）
+
+既存のサービス・`AppDbContext`・実際の PostgreSQL 17 をつなぎ、保存結果を別の `DbContext` から読み直します。HTTP のルーティング・認証・入力チェックは、この統合テストの対象には含めていません。
+
+| 対象 | 件数 | 確認すること |
+| --- | --- | --- |
+| 手動変更からのルール作成 | 12 | 新規作成と次回の自動分類、既存ルールの更新、更新後の店名の利用、分類不変・未分類への変更では学習しないこと、他人の分類・取引・ルールとの分離、競合時の再試行、保存失敗時の巻き戻し |
+| 保存直前に消された場合 | 2 | 取引の作成中に分類が消えても未分類で保存すること、更新中に取引が消えたら404にしてルールも残さないこと |
+| 初期分類 | 2 | 6件追加と再実行0件、不足分だけの追加、既存IDの維持と所有者ごとの分離 |
+| 集計 | 3 | 月・期間指定と両端の日、未分類と支出・収入別の合計、期間外・他人の取引の除外、空の結果、intを超える合計 |
+
+Docker Desktop を起動し、[compose.tests.yaml](compose.tests.yaml) でテスト専用の DB サーバーを起動します。通常の Compose とプロジェクト名・ポート・保存領域を分け、既存の DB ボリュームと `.env` は使いません。
+
+```powershell
+docker compose -f compose.tests.yaml up -d --wait
+$env:SHOPLIST_TEST_POSTGRES = "Host=127.0.0.1;Port=55432;Database=shoplist_tests;Username=shoplist_test;Password=shoplist_test_password"
+dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj --filter "TestCategory=Integration"
+```
+
+テスト用 DB のポートは `127.0.0.1` だけに公開しているため、手元では `Host=localhost` ではなく `127.0.0.1` を指定します。Windows で `localhost` にすると先に IPv6（`::1`）へ接続しようとして待ち時間が生じ、2件で約34秒かかったり接続がタイムアウトしたりしました（`127.0.0.1` では全件約1秒）。CI は Linux 上のサービスコンテナなので `localhost` のままにしています。
+
+接続先はローカルの `shoplist_tests` に限定しています。各テストはそのサーバー内にランダムな名前の専用 DB を作り、アプリと同じマイグレーションを適用して、終了時に削除します。上のユーザー・パスワードは使い捨てのテスト専用です。Azure や通常の開発用 DB の接続情報は設定しません。
+
+競合のテストは、保存直前に別の接続からルールを登録・削除し、PostgreSQL の一意制約や更新件数による競合を再現します。分類を保存前に削除するテストでは、外部キー違反で失敗したときに取引とルールが片方だけ更新されないことも確認します。取引の作成では、分類が消えても支払いの記録を失わないよう、未分類で保存し直すことを確認します。
+
+`SHOPLIST_TEST_POSTGRES` が未設定・不正な場合や、DB に接続できない場合は、統合テストを失敗させます。DB を用意せずに成功扱いでスキップすることはありません。
+
+DB が起動し、接続設定がある状態で `--filter` を省くと、計33件を実行します。終了後は、テスト専用のコンテナを停止・削除できます。
+
+```powershell
+docker compose -f compose.tests.yaml down
+Remove-Item Env:SHOPLIST_TEST_POSTGRES
+```
+
+#### HTTPを通した手動確認
+
+HTTP API と DB を通した確認は、[ShopListApi.http](ShopListApi/ShopListApi/ShopListApi.http) と [家計仕上げ.http](ShopListApi/ShopListApi/家計仕上げ.http) から手動で行います。前者の101～125は分類ルールの更新・削除、後者の1～39は初期分類の確認・手動変更からのルール作成・集計の確認です。Visual Studio の HTTP エディターでは `dev` 環境を選びます。
 
 両ファイルの `ShopListApi_HostAddress` は、起動方法に合わせます。既定の `http://localhost:5247` はローカルの開発用で、Docker Compose では `http://localhost:8080`（`API_PORT` を変えた場合はそのポート）にします。
-
-手動変更からのルール作成、初期分類の投入、DB での集計を検証する自動テストは、まだ CI に含まれていません。同時操作の確認も使い捨ての DB で行ったため、DB を使う統合テストとして継続実行できるようにすることが今後の課題です。
 
 ### GitHub Actions（CI）
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) に、次の処理を順番に実行する設定を追加しています。
 
-1. .NET 10 SDK を準備し、パッケージを復元する
-2. ソリューション全体を Release 構成でビルドする
-3. テストプロジェクト内のすべてのテストを実行する（現在のコードでは14件）
+1. テスト専用の PostgreSQL 17 をサービスコンテナで起動し、接続できるまで待つ
+2. .NET 10 SDK を準備し、パッケージを復元する
+3. ソリューション全体を Release 構成でビルドする
+4. DB を使わないテスト14件を実行する
+5. DB 統合テスト19件を実行する
 
 main への push と main 向けのプルリクエストで自動実行します。GitHub の「Actions」タブから「CI」を選び、手動実行することもできます。
-テストは DB を使わないため、CI 用の DB や API キーを設定する必要はありません。
+CI 内の PostgreSQL は `localhost:5432` で接続し、専用の `SHOPLIST_TEST_POSTGRES` を統合テストのステップに渡します。アプリや Azure の DB 接続情報・API キー・GitHub Secrets の追加は不要です。
 
-GitHub 上の初回 CI は、分類の判定テスト4件の版で 2026-10-28 に成功しました（[実行結果](https://github.com/dev-fujii/shop-list-api/actions/runs/40533822473)）。集計のテストを加えた計14件の版（commit `4bba03f`）も、push 後の CI 成功を確認しています。各実行の結果は「Actions」タブで開き、ビルドとテストの成功を確かめます。
+GitHub 上の初回 CI は、分類の判定テスト4件の版で 2026-10-28 に成功しました（[実行結果](https://github.com/dev-fujii/shop-list-api/actions/runs/40533822473)）。集計のテストを加えた計14件の版（commit `4bba03f`）も、push 後の CI 成功を確認しています。DB 統合テストを加えた計33件の構成は手元で成功しており、GitHub 上では今回の変更を push してから確認します。各実行の結果は「Actions」タブで開き、ビルドと両方のテストの成功を確かめます。
 
 ### Azure（Container Apps）に載せる流れ
 
@@ -285,7 +321,8 @@ GitHub 上の初回 CI は、分類の判定テスト4件の版で 2026-10-28 �
 - [x] Azure で初期分類の6件追加・再実行0件・一覧の取得を確認する
 - [x] Azure で月指定の集計と、分類変更からのルール作成・次回の自動分類を確認する
 - [x] Azure で分類ルールを更新し、取得結果への反映と、削除後に取得すると404になることを確認する（2026-10-29）
-- [ ] 手動変更からのルール作成など、DB を使う統合テストを CI に追加する
+- [x] 手動変更からのルール作成など、DB 統合テスト19件と CI の PostgreSQL 起動・実行設定を追加し、手元で計33件の成功を確認する（2026-10-29）
+- [ ] DB 統合テストを含む構成の CI が GitHub 上で成功することを確認する
 - [ ] アカウント作成とログイン（ASP.NET Core Identity）
 
 ## ドキュメント

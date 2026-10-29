@@ -17,6 +17,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # DB統合テスト専用。アプリやAzureの接続設定は使わない。
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: shoplist_test
+          POSTGRES_PASSWORD: shoplist_test_password
+          POSTGRES_DB: shoplist_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U shoplist_test -d shoplist_tests"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: ソースコードを取得
         uses: actions/checkout@v7
@@ -34,5 +50,10 @@ jobs:
       - name: Release構成でビルド
         run: dotnet build ShopListApi/ShopListApi.slnx --configuration Release --no-restore
 
-      - name: 自動テストを実行
-        run: dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj --configuration Release --no-build --no-restore
+      - name: DBを使わないテストを実行
+        run: dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory!=Integration"
+
+      - name: PostgreSQLを使う統合テストを実行
+        env:
+          SHOPLIST_TEST_POSTGRES: "Host=localhost;Port=5432;Database=shoplist_tests;Username=shoplist_test;Password=shoplist_test_password"
+        run: dotnet test ShopListApi/ShopListApi.Tests/ShopListApi.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Integration"

@@ -1,0 +1,20 @@
+# DB統合テスト専用。通常のcompose.yamlや.env、既存のDBボリュームを使わない。
+name: shoplist-integration-tests
+
+services:
+  postgres-test:
+    image: postgres:17
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_USER: shoplist_test
+      # ローカルとCIの使い捨てDB専用の値。アプリの秘密情報ではない。
+      POSTGRES_PASSWORD: shoplist_test_password
+      POSTGRES_DB: shoplist_tests
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shoplist_test -d shoplist_tests"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
