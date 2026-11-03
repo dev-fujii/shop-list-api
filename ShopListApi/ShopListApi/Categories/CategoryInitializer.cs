@@ -1,27 +1,28 @@
 using Microsoft.EntityFrameworkCore;
-using ShopListApi.Common;
 using ShopListApi.Data;
 
 namespace ShopListApi.Categories;
 
 /// <summary>
-/// 今のユーザーに初期分類を用意する
+/// 指定したユーザーに初期分類を用意する
 /// 同じ名前の分類があれば、そのまま使う
 /// </summary>
 /// <remarks>
 /// 初期化コマンドから呼び出す。通常の API 起動時には実行しない。
 /// もう一度実行すると、削除・改名によって足りなくなった初期名も追加する。
+/// 誰の分類かは引数で受け取る。コマンドはリクエストの外で動き、名札が無いため。
+/// アカウント作成を足したら、新しいユーザーの ID を渡して使える
 /// </remarks>
 public class CategoryInitializer
 {
     /// <summary>
-    /// 自分の分類に無い初期名だけを追加する
+    /// そのユーザーの分類に無い初期名だけを追加する
     /// </summary>
-    public async Task<int> InitializeAsync()
+    public async Task<int> InitializeAsync(Guid userId)
     {
-        // 自分の分類の名前だけを取る
+        // そのユーザーの分類の名前だけを取る
         var existingNames = await _db.Categories
-            .Where(c => c.UserId == _currentUser.Id)
+            .Where(c => c.UserId == userId)
             .Select(c => c.Name)
             .ToListAsync();
 
@@ -36,9 +37,9 @@ public class CategoryInitializer
 
             _db.Categories.Add(new Category
             {
-                // 自分の分類として作る。ID は DB が決める
+                // そのユーザーの分類として作る。ID は DB が決める
                 Name = name,
-                UserId = _currentUser.Id
+                UserId = userId
             });
             addedCount++;
         }
@@ -51,12 +52,11 @@ public class CategoryInitializer
     #region // --- 内部処理 --- //
 
     /// <summary>
-    /// 分類の追加に使う DB と、今のユーザー情報を受け取る
+    /// 分類の追加に使う DB を受け取る
     /// </summary>
-    public CategoryInitializer(AppDbContext db, CurrentUser currentUser)
+    public CategoryInitializer(AppDbContext db)
     {
         _db = db;
-        _currentUser = currentUser;
     }
 
     /// <summary>
@@ -73,7 +73,6 @@ public class CategoryInitializer
     ];
 
     private readonly AppDbContext _db;
-    private readonly CurrentUser _currentUser;
 
     #endregion
 }

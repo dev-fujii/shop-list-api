@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ShopListApi.Categories;
 using ShopListApi.CategoryRules;
 using ShopListApi.Common;
 using ShopListApi.Data;
 using ShopListApi.Summaries;
 using ShopListApi.Transactions;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -58,9 +60,29 @@ builder.Services.AddAuthorization(options =>
         .Build();
 });
 
-// 今のユーザー: ログインを作るまでは仮のユーザーを返す。
-// リクエストごとに1つ作る
-builder.Services.AddScoped<CurrentUser>();
+// 今のリクエストを取り出す道具を登録する。中身は AddSingleton。
+// コントローラーの外から、今のリクエストの名札を読むために使う
+builder.Services.AddHttpContextAccessor();
+
+// 今のユーザー: リクエストの名札の ID から作る。リクエストごとに1つ作る
+// 鍵で来ても JWT で来ても、名札の形が同じならここは変えずに済む
+builder.Services.AddScoped<CurrentUser>(sp =>
+{
+    // 今のリクエストを取り出す道具をもらう
+    var accessor = sp.GetRequiredService<IHttpContextAccessor>();
+
+    // 名札から ID の文字列を読む。リクエストの外では HttpContext が null なので ?. で受ける
+    var idText = accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    // FallbackPolicy があるので、名札の無いリクエストはここまで来ない。
+    // 来たら仕組みのバグなので、空の ID で進めずに止める（500）
+    if (!Guid.TryParse(idText, out var id))
+    {
+        throw new InvalidOperationException("無効なユーザー ID が指定されました。");
+    }
+
+    return new CurrentUser(id);
+});
 
 // 分類の処理
 builder.Services.AddScoped<CategoryService>();
@@ -87,8 +109,20 @@ var app = builder.Build();
 if (args.Contains("--initialize-categories", StringComparer.Ordinal))
 {
     await using var scope = app.Services.CreateAsyncScope();
+
+    // 誰の初期分類を作るか: 鍵の持ち主。コマンドはリクエストの外なので名札が無い。
+    // このコマンドは app.Run() を通らず ValidateOnStart は走らないが、.Value を読んだときに検証される
+    var apiKeyOptions = scope.ServiceProvider.GetRequiredService<IOptions<ApiKeyOptions>>().Value;
+
+    // ID が無いまま進むと、全部 0 などの決まっていないユーザーに分類ができるので止める
+    if (!apiKeyOptions.UserId.HasValue)
+    {
+        throw new InvalidOperationException("ユーザー ID が指定されていません。");
+    }
+
+    var userId = apiKeyOptions.UserId.Value;
     var addedCount = await scope.ServiceProvider.GetRequiredService<CategoryInitializer>()
-        .InitializeAsync();
+        .InitializeAsync(userId);
     app.Logger.LogInformation("初期分類を{Count}件追加しました。", addedCount);
     await app.DisposeAsync();
     return;

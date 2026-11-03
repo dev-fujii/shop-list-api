@@ -21,13 +21,13 @@ public class CategoryInitializerTests : PostgresTestBase
         // 1回目は、初期分類の6件すべてを追加する
         await using (var db = CreateDbContext())
         {
-            Assert.AreEqual(6, await new CategoryInitializer(db, User).InitializeAsync());
+            Assert.AreEqual(6, await new CategoryInitializer(db).InitializeAsync(User.Id));
         }
 
         // 2回目は別の接続から実行する。DBにある分類を見て、何も追加しない
         await using (var db = CreateDbContext())
         {
-            Assert.AreEqual(0, await new CategoryInitializer(db, User).InitializeAsync());
+            Assert.AreEqual(0, await new CategoryInitializer(db).InitializeAsync(User.Id));
         }
 
         // DBには6件だけがあり、すべて今のユーザーのもの
@@ -57,7 +57,7 @@ public class CategoryInitializerTests : PostgresTestBase
         // 他人の分類は数えず、自分に足りない5件だけを追加する
         await using (var db = CreateDbContext())
         {
-            Assert.AreEqual(5, await new CategoryInitializer(db, User).InitializeAsync());
+            Assert.AreEqual(5, await new CategoryInitializer(db).InitializeAsync(User.Id));
         }
 
         // 既存の分類はIDが変わらず、他人の6件もそのまま残る
