@@ -14,4 +14,27 @@ namespace ShopListApi.Accounts;
 /// </remarks>
 public class AppUser : IdentityUser<Guid>
 {
+    /// <summary>
+    /// ユーザー名の最大文字数
+    /// </summary>
+    /// <remarks>
+    /// Identity が作る UserName の列の長さと同じ
+    /// </remarks>
+    public const int UserNameMaxLength = 256;
+
+    /// <summary>
+    /// ユーザー名に使える文字
+    /// </summary>
+    /// <remarks>
+    /// Identity の既定と同じ。英数字と - . _ @ +
+    /// </remarks>
+    public const string UserNamePattern = "^[a-zA-Z0-9._@+-]+$";
+
+    /// <summary>
+    /// パスワードの最小文字数
+    /// </summary>
+    /// <remarks>
+    /// 入力チェックと Identity の設定の両方で使う
+    /// </remarks>
+    public const int PasswordMinLength = 15;
 }

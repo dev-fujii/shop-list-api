@@ -38,7 +38,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 {
     // パスワードは15文字以上。混ぜる文字の決まりは付けない
     // NIST の今の指針に合わせる
-    options.Password.RequiredLength = 15;
+    options.Password.RequiredLength = AppUser.PasswordMinLength;
     options.Password.RequireDigit = false;
     options.Password.RequireLowercase = false;
     options.Password.RequireUppercase = false;
@@ -121,6 +121,9 @@ builder.Services.AddScoped<SummaryService>();
 
 // 初期分類を用意する処理
 builder.Services.AddScoped<CategoryInitializer>();
+
+// アカウントの処理
+builder.Services.AddScoped<AccountService>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<AppExceptionHandler>();

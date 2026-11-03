@@ -52,4 +52,15 @@ public static class ErrorCodes
         /// </summary>
         public const string DuplicateKeyword = "category_rule.duplicate_keyword";
     }
+
+    /// <summary>
+    /// アカウントのエラー
+    /// </summary>
+    public static class Accounts
+    {
+        /// <summary>
+        /// 同じユーザー名のアカウントがある（409）
+        /// </summary>
+        public const string DuplicateUserName = "account.duplicate_user_name";
+    }
 }
