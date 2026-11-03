@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using ShopListApi.Accounts;
 using ShopListApi.Categories;
 using ShopListApi.CategoryRules;
 using ShopListApi.Transactions;
@@ -8,7 +11,12 @@ namespace ShopListApi.Data;
 /// <summary>
 /// アプリ全体のデータベース
 /// </summary>
-public class AppDbContext : DbContext
+/// <remarks>
+/// 親クラスを IdentityDbContext にして、アカウントの表も一緒に持つ。分類・取引・分類ルールの表はそのまま。
+/// アカウントは AppUser、役職は IdentityRole、ID はどちらも Guid。
+/// 役職は今は使わないが、表だけ用意しておく
+/// </remarks>
+public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
 {
     /// <summary>
     /// 分類の表

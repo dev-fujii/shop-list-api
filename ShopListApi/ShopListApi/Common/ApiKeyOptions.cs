@@ -6,8 +6,8 @@ namespace ShopListApi.Common;
 /// 仮の鍵（API キー）の設定
 /// </summary>
 /// <remarks>
-/// 設定の ApiKey セクションに対応する（環境変数では ApiKey__Key・ApiKey__UserId）。
-/// iPhone のショートカット（人が操作しない入口）用の1つの鍵と、その鍵の持ち主
+/// 設定の ApiKey セクションに対応する。環境変数では ApiKey__Key・ApiKey__UserId。
+/// iPhone のショートカット用の1つの鍵と、その鍵の持ち主
 /// </remarks>
 public class ApiKeyOptions
 {

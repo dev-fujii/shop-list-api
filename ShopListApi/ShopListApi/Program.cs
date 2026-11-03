@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ShopListApi.Accounts;
 using ShopListApi.Categories;
 using ShopListApi.CategoryRules;
 using ShopListApi.Common;
@@ -31,6 +32,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(options =>
    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// アカウントの登録やパスワードの確認をする道具。保存先は上の DB
+// 画面もクッキーも使わないので AddIdentityCore にする。トークンは自分で出す
+builder.Services.AddIdentityCore<AppUser>()
+    .AddEntityFrameworkStores<AppDbContext>();
+
 builder.Services.Configure<PaginationOptions>(
 builder.Configuration.GetSection("Pagination"));
 
@@ -39,7 +45,7 @@ builder.Services.AddOptions<SummaryOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// (仮の鍵)ApiKey セクションから読む。鍵はシークレット、鍵の持ち主（UserId）は appsettings.json に置く
+// (仮の鍵)ApiKey セクションから読む。鍵はシークレット、鍵の持ち主の ID は appsettings.json に置く
 builder.Services.AddOptions<ApiKeyOptions>()
     .Bind(builder.Configuration.GetSection("ApiKey"))
     .ValidateDataAnnotations()
@@ -75,7 +81,7 @@ builder.Services.AddScoped<CurrentUser>(sp =>
     var idText = accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
     // FallbackPolicy があるので、名札の無いリクエストはここまで来ない。
-    // 来たら仕組みのバグなので、空の ID で進めずに止める（500）
+    // 来たら仕組みのバグなので、空の ID で進めずに 500 で止める
     if (!Guid.TryParse(idText, out var id))
     {
         throw new InvalidOperationException("無効なユーザー ID が指定されました。");

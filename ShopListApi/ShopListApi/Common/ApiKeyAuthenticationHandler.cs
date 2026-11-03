@@ -8,7 +8,7 @@ using System.Text.Encodings.Web;
 namespace ShopListApi.Common;
 
 /// <summary>
-/// 仮の鍵（API キー）で「この人は誰か」を確かめる認証ハンドラー（確かめ係）
+/// 仮の鍵で「この人は誰か」を確かめる認証ハンドラー
 /// </summary>
 /// <remarks>
 /// 鍵の確かめを、自分で書いたミドルウェアから ASP.NET Core の認証の仕組みに移したもの。
@@ -32,14 +32,14 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
     /// </remarks>
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // ヘッダーが無いときは、判定しない（NoResult）。鍵で来た人ではないだけで、失敗ではない。
+        // ヘッダーが無いときは判定しない。鍵で来た人ではないだけで、失敗ではない。
         // JWT を足したとき、鍵を持たない人は JWT のほうで確かめるため
         if (!Request.Headers.TryGetValue(HeaderName, out var providedKey))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        // 鍵が違うときは失敗（Fail）。この文はログに出るので、送られた鍵そのものは入れない
+        // 鍵が違うときは失敗。この文はログに出るので、送られた鍵そのものは入れない
         if (!IsSameKey(providedKey.ToString()))
         {
             return Task.FromResult(AuthenticateResult.Fail("鍵が違います。"));

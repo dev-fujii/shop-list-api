@@ -96,7 +96,7 @@ public abstract class PostgresTestBase
     }
 
     /// <summary>
-    /// 今のユーザー（appsettings.json の ApiKey:UserId と同じ仮のユーザー）
+    /// 今のユーザー。appsettings.json の ApiKey:UserId と同じ仮のユーザー
     /// </summary>
     protected static readonly CurrentUser User = new(new Guid("089dd050-a88f-40bc-809f-c05dc3acfef6"));
 
