@@ -1,10 +1,12 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using ShopListApi.Categories;
 using ShopListApi.CategoryRules;
 using ShopListApi.Common;
 using ShopListApi.Data;
-using ShopListApi.Transactions;
 using ShopListApi.Summaries;
+using ShopListApi.Transactions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -35,11 +37,26 @@ builder.Services.AddOptions<SummaryOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// (仮の鍵)ApiKey セクションから読む。
+// (仮の鍵)ApiKey セクションから読む。鍵はシークレット、鍵の持ち主（UserId）は appsettings.json に置く
 builder.Services.AddOptions<ApiKeyOptions>()
     .Bind(builder.Configuration.GetSection("ApiKey"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+
+// 認証: X-Api-Key の鍵で誰かの名札を付ける。スキームの指定が無いときはこれを使う
+// 設定は ApiKeyOptions から読むので、スキーム自体の設定は無し
+builder.Services.AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null);
+
+// 認可: 何も付いていない所は全部、名札が必要。無ければ 401
+// [Authorize] を付けて回る形と違い、付け忘れても閉じたままになる。
+// 開ける所だけ [AllowAnonymous] を付ける
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // 今のユーザー: ログインを作るまでは仮のユーザーを返す。
 // リクエストごとに1つ作る
@@ -91,9 +108,9 @@ app.UseStatusCodePages();
 
 app.UseHttpsRedirection();
 
-// 仮の鍵を確かめる。無い・違えば 401（UseStatusCodePages が Problem Details の形にする）
-app.UseMiddleware<ApiKeyMiddleware>();
-
+// 先に確かめ係が名札を付け、そのあと門番が名札を見る。この順番でないと、門番はいつも名札なしと判断する
+// 止めるときの 401 は本文なしなので、UseStatusCodePages が Problem Details の形にする
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
