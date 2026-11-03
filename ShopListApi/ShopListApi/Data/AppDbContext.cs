@@ -12,7 +12,8 @@ namespace ShopListApi.Data;
 /// アプリ全体のデータベース
 /// </summary>
 /// <remarks>
-/// 親クラスを IdentityDbContext にして、アカウントの表も一緒に持つ。分類・取引・分類ルールの表はそのまま。
+/// 親クラスを IdentityDbContext にして、アカウントの表も一緒に持つ。
+/// 分類・取引・分類ルールの表はそのまま。
 /// アカウントは AppUser、役職は IdentityRole、ID はどちらも Guid。
 /// 役職は今は使わないが、表だけ用意しておく
 /// </remarks>

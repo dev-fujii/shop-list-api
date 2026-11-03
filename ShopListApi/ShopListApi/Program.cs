@@ -34,8 +34,23 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // アカウントの登録やパスワードの確認をする道具。保存先は上の DB
 // 画面もクッキーも使わないので AddIdentityCore にする。トークンは自分で出す
-builder.Services.AddIdentityCore<AppUser>()
-    .AddEntityFrameworkStores<AppDbContext>();
+builder.Services.AddIdentityCore<AppUser>(options =>
+{
+    // パスワードは15文字以上。混ぜる文字の決まりは付けない
+    // NIST の今の指針に合わせる
+    options.Password.RequiredLength = 15;
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+
+    // 5回続けて失敗したら5分止める。作ったばかりのアカウントも同じ
+    // Identity の既定と同じ値
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    options.Lockout.AllowedForNewUsers = true;
+})
+.AddEntityFrameworkStores<AppDbContext>();
 
 builder.Services.Configure<PaginationOptions>(
 builder.Configuration.GetSection("Pagination"));
@@ -45,7 +60,8 @@ builder.Services.AddOptions<SummaryOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// (仮の鍵)ApiKey セクションから読む。鍵はシークレット、鍵の持ち主の ID は appsettings.json に置く
+// (仮の鍵)ApiKey セクションから読む。
+// 鍵はシークレット、鍵の持ち主の ID は appsettings.json に置く
 builder.Services.AddOptions<ApiKeyOptions>()
     .Bind(builder.Configuration.GetSection("ApiKey"))
     .ValidateDataAnnotations()
@@ -77,7 +93,8 @@ builder.Services.AddScoped<CurrentUser>(sp =>
     // 今のリクエストを取り出す道具をもらう
     var accessor = sp.GetRequiredService<IHttpContextAccessor>();
 
-    // 名札から ID の文字列を読む。リクエストの外では HttpContext が null なので ?. で受ける
+    // 名札から ID の文字列を読む。
+    // リクエストの外では HttpContext が null なので ?. で受ける
     var idText = accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
     // FallbackPolicy があるので、名札の無いリクエストはここまで来ない。
@@ -117,7 +134,8 @@ if (args.Contains("--initialize-categories", StringComparer.Ordinal))
     await using var scope = app.Services.CreateAsyncScope();
 
     // 誰の初期分類を作るか: 鍵の持ち主。コマンドはリクエストの外なので名札が無い。
-    // このコマンドは app.Run() を通らず ValidateOnStart は走らないが、.Value を読んだときに検証される
+    // このコマンドは app.Run() を通らないので ValidateOnStart は走らない。
+    // それでも .Value を読んだときに検証される
     var apiKeyOptions = scope.ServiceProvider.GetRequiredService<IOptions<ApiKeyOptions>>().Value;
 
     // ID が無いまま進むと、全部 0 などの決まっていないユーザーに分類ができるので止める
@@ -149,7 +167,8 @@ app.UseStatusCodePages();
 app.UseHttpsRedirection();
 
 // 先に確かめ係が名札を付け、そのあと門番が名札を見る。この順番でないと、門番はいつも名札なしと判断する
-// 止めるときの 401 は本文なしなので、UseStatusCodePages が Problem Details の形にする
+// 止めるときの 401 は本文なし。
+// UseStatusCodePages が Problem Details の形にする
 app.UseAuthentication();
 app.UseAuthorization();
 

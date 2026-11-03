@@ -15,7 +15,8 @@ public class ApiKeyOptions
     /// 正しい API キー。リクエストの X-Api-Key ヘッダーと比べる
     /// </summary>
     /// <remarks>
-    /// 値は秘密なので appsettings.json には書かず、ユーザーシークレット・.env・Azure のシークレットに置く。
+    /// 値は秘密なので appsettings.json には書かない。
+    /// ユーザーシークレット・.env・Azure のシークレットに置く。
     /// 設定が無いと string.Empty のままになり、[Required] が空の文字列を通さないので、起動時の検証で止まる
     /// </remarks>
     [Required]
