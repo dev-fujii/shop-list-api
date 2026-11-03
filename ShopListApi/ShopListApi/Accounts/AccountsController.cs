@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ShopListApi.Common;
 
 namespace ShopListApi.Accounts;
 
@@ -17,12 +19,13 @@ namespace ShopListApi.Accounts;
 public class AccountsController : ControllerBase
 {
     /// <summary>
-    /// POST /accounts: アカウントを作る（201。同じユーザー名なら 409、入力が正しくなければ 400）
+    /// POST /accounts: アカウントを作る（201。同じユーザー名なら 409、入力が正しくなければ 400、多すぎれば 429）
     /// </summary>
     /// <remarks>
     /// ユーザーの ID は返さず、1件を取る API も無いので、Location は付けない
     /// </remarks>
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.CreateAccount)]
     public async Task<ActionResult<AccountResponse>> Create(CreateAccountRequest request)
     {
         var created = await _accountService.CreateAsync(request);

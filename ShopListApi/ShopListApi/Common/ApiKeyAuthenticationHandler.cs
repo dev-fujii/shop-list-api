@@ -25,6 +25,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
     public const string SchemeName = "ApiKey";
 
     /// <summary>
+    /// 鍵を入れるヘッダーの名前。鍵と JWT の振り分けでも使う
+    /// </summary>
+    public const string HeaderName = "X-Api-Key";
+
+    /// <summary>
     /// リクエストごとに呼ばれる。鍵を確かめ、結果を返す
     /// </summary>
     /// <remarks>
@@ -92,11 +97,6 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         var providedBytes = Encoding.UTF8.GetBytes(providedKey);
         return CryptographicOperations.FixedTimeEquals(providedBytes, _apiKeyBytes);
     }
-
-    /// <summary>
-    /// 鍵を入れるヘッダーの名前
-    /// </summary>
-    private const string HeaderName = "X-Api-Key";
 
     /// <summary>
     /// 鍵の設定

@@ -63,4 +63,15 @@ public static class ErrorCodes
         /// </summary>
         public const string DuplicateUserName = "account.duplicate_user_name";
     }
+
+    /// <summary>
+    /// ログインのエラー
+    /// </summary>
+    public static class Tokens
+    {
+        /// <summary>
+        /// ユーザー名かパスワードが違う。ロック中も同じ（401）
+        /// </summary>
+        public const string InvalidCredentials = "token.invalid_credentials";
+    }
 }

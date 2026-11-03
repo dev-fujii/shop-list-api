@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using ShopListApi.Common; 
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ShopListApi.Common;
 namespace ShopListApi.Transactions;
 using Microsoft.Extensions.Options;
 
@@ -72,7 +73,11 @@ public class TransactionsController : ControllerBase
     /// <summary>
     /// POST /transactions: 取引を登録する（201。入力が正しくなければ 400）
     /// </summary>
+    /// <remarks>
+    /// iPhone のショートカットが鍵で呼ぶので、ここだけ鍵でも通す
+    /// </remarks>
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.AllowApiKey)]
     public async Task<ActionResult<TransactionResponse>> Create(CreateTransactionRequest request)
     {
         var created = await _transactionService.CreateAsync(request);

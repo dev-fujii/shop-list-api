@@ -1,21 +1,37 @@
 @ShopListApi_HostAddress = http://localhost:5247
 
 # 送る前に、右上の環境の選択で「dev」を選ぶ
-# {{ApiKey}} は http-client.env.json を通して、ユーザーシークレットの ApiKey:Key から読む（鍵はこのファイルに書かない）
+# 最初に 0-2 でログインする（0-1 は初回だけ）。ユーザー名とパスワードは http-client.env.json を通して読む
+# パスワードはユーザーシークレットの Http:Password（このファイルに書かない）
+# {{ApiKey}} は鍵の確認（69〜71-2）だけで使う。ユーザーシークレットの ApiKey:Key から読む
 # 32は設定変更専用
 # 「無いID」の999は、実際に存在しないことを確認して使う
 
-# ---------- 分類 ----------
+# ---------- ログイン（最初に送る） ----------
+
+### 0-1. 初回だけ: 確認用のアカウントを作る（201。2回目からは 409 でよい）
+POST {{ShopListApi_HostAddress}}/accounts
+Content-Type: application/json
+
+{ "userName": "{{UserName}}", "password": "{{Password}}" }
+
+### 0-2. ログインしてトークンを受け取る（200。以下はこのトークンで呼ぶ。60分で切れたらもう一度送る）
+# @name login
+POST {{ShopListApi_HostAddress}}/tokens
+Content-Type: application/json
+
+{ "userName": "{{UserName}}", "password": "{{Password}}" }
 
 ### 1. 分類の一覧
+# ---------- ここから分類 ----------
 GET {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 2. 分類を作る（201 と Location が返る）
 # @name food
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -24,7 +40,7 @@ Content-Type: application/json
 
 ### 3. 同じ名前でもう一度作る（409 category.duplicate_name）
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -33,7 +49,7 @@ Content-Type: application/json
 
 ### 4. 空白だけの名前（400）
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -42,7 +58,7 @@ Content-Type: application/json
 
 ### 5. 21文字の名前（400）
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -51,18 +67,18 @@ Content-Type: application/json
 
 ### 6. 分類を1件（200。2 で作った分類）
 GET {{ShopListApi_HostAddress}}/categories/{{food.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 7. 無い分類（404 category.not_found）
 GET {{ShopListApi_HostAddress}}/categories/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 8. もう1つ分類を作る（11 で使う）
 # @name daily
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -71,7 +87,7 @@ Content-Type: application/json
 
 ### 9. 分類の名前を変える（204。6 をもう一度送ると名前が変わっている）
 PUT {{ShopListApi_HostAddress}}/categories/{{food.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -80,7 +96,7 @@ Content-Type: application/json
 
 ### 10. 無い分類の名前を変える（404 category.not_found）
 PUT {{ShopListApi_HostAddress}}/categories/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -89,7 +105,7 @@ Content-Type: application/json
 
 ### 11. ほかの分類と同じ名前に変える（409 category.duplicate_name。9 で付けた名前）
 PUT {{ShopListApi_HostAddress}}/categories/{{daily.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -98,19 +114,19 @@ Content-Type: application/json
 
 ### 12. 分類を消す（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{food.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 13. 無い分類を消す（404 category.not_found）
 DELETE {{ShopListApi_HostAddress}}/categories/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 14. 後片付け: 8 で作った分類を消す（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{daily.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 15. 無い URL（404。本文は Problem Details の形）
 GET {{ShopListApi_HostAddress}}/nothing
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 取引の登録・入力チェック ----------
@@ -119,7 +135,7 @@ Accept: application/json
 ### 16. 取引を登録する・全部の項目あり（201 と Location が返る）
 # @name lawson
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -132,7 +148,7 @@ Content-Type: application/json
 
 ### 17. date と type を省く（201。date は日本時間の今日、type は expense になる）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -143,7 +159,7 @@ Content-Type: application/json
 
 ### 18. source を省く（400。errors に Source）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -153,7 +169,7 @@ Content-Type: application/json
 
 ### 19. 金額が 0（400。errors に Amount）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -164,7 +180,7 @@ Content-Type: application/json
 
 ### 20. 金額が 1,000万円（400。9,999,999 までなので）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -175,7 +191,7 @@ Content-Type: application/json
 
 ### 21. 51文字の店名（400）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -186,7 +202,7 @@ Content-Type: application/json
 
 ### 22. source を数字で送る（400。名前の文字列だけ受け付ける）
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -198,12 +214,12 @@ Content-Type: application/json
 ### 23. 取引を1件（200。16 で登録した取引）
 # ---------- ここから取引の1件取得 ----------
 GET {{ShopListApi_HostAddress}}/transactions/{{lawson.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 24. 無い取引（404 transaction.not_found）
 GET {{ShopListApi_HostAddress}}/transactions/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 取引一覧・ページ分割 ----------
@@ -212,37 +228,37 @@ Accept: application/json
 
 ### 25. ページ指定を省略する（200。page = 1、pageSize = 50）
 GET {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 26. 1ページ目を1件取得（200。items が1件）
 GET {{ShopListApi_HostAddress}}/transactions?page=1&pageSize=1
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 27. 2ページ目を1件取得（200。26 と id が異なり、totalCount は同じ）
 GET {{ShopListApi_HostAddress}}/transactions?page=2&pageSize=1
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 28. ページ番号が0（400。errors に page）
 GET {{ShopListApi_HostAddress}}/transactions?page=0
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 29. 1ページの件数が上限を超える（400。errors に pageSize）
 GET {{ShopListApi_HostAddress}}/transactions?pageSize=101
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 30. 1ページの件数が0（400。errors に pageSize）
 GET {{ShopListApi_HostAddress}}/transactions?pageSize=0
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 31. 最後のページより後ろを指定する（200。items は空、totalCount は全件数のまま）
 GET {{ShopListApi_HostAddress}}/transactions?page=999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 設定ファイルからの読み込み確認（必要なときだけ） ----------
@@ -253,7 +269,7 @@ Accept: application/json
 
 ### 32. 設定で変更した上限を超える（試験用の上限2なら400。通常の上限100なら200）
 GET {{ShopListApi_HostAddress}}/transactions?pageSize=3
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 取引の更新・削除・絞り込み ----------
@@ -263,7 +279,7 @@ Accept: application/json
 ### 33. 確認用の分類を作る（201）
 # @name exerciseCategory
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -273,7 +289,7 @@ Content-Type: application/json
 ### 34. 確認用の取引を作る（201。source は manual）
 # @name exerciseTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -286,7 +302,7 @@ Content-Type: application/json
 
 ### 35. 取引を更新する（204）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -300,33 +316,33 @@ Content-Type: application/json
 ### 36. 更新後の取引を取得する（200。35の内容が反映され、source は manual のまま）
 # 41〜45のエラーのあとも再送し、35の値から変わっていないことを確認する
 GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 37. 分類で絞り込む（200。items と totalCount は、この分類の取引だけ）
 GET {{ShopListApi_HostAddress}}/transactions?categoryId={{exerciseCategory.response.body.$.id}}&pageSize=1
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 38. 同じ開始日・終了日で絞る（200。10月21日の取引だけ）
 GET {{ShopListApi_HostAddress}}/transactions?from=2026-10-21&to=2026-10-21
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 39. 開始日が終了日より後（400。errors に from）
 GET {{ShopListApi_HostAddress}}/transactions?from=2026-10-22&to=2026-10-21
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 40. 存在しない日付（400。ASP.NET Core の入力チェック）
 GET {{ShopListApi_HostAddress}}/transactions?from=2026-02-30
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 41. 無い分類に変更する（422 category.not_found。取引は変更されない）
 # 分類ID 999 が存在しないことを確認してから送る
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -339,7 +355,7 @@ Content-Type: application/json
 
 ### 42. 金額0で更新する（400。取引は変更されない）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -352,7 +368,7 @@ Content-Type: application/json
 
 ### 43. 日付を省いて更新する（400。errors に Date。取引は変更されない）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -364,7 +380,7 @@ Content-Type: application/json
 
 ### 44. 種類を省いて更新する（400。errors に Type。取引は変更されない）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -376,7 +392,7 @@ Content-Type: application/json
 
 ### 45. 無い取引を更新する（404 transaction.not_found）
 PUT {{ShopListApi_HostAddress}}/transactions/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -389,12 +405,12 @@ Content-Type: application/json
 
 ### 46. 使用中の分類を削除する（409 category.in_use）
 DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 47. 取引を未分類に変更する（204。36を再送すると categoryId は null）
 PUT {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -407,29 +423,29 @@ Content-Type: application/json
 
 ### 48. 使われなくなった分類を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{exerciseCategory.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 49. 取引を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 50. 削除した取引を取得する（404 transaction.not_found）
 GET {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 51. 同じ取引をもう一度削除する（404 transaction.not_found）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{exerciseTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 判定の順番（400 → 404 → 422） ----------
 
 ### 52. 入力が正しくない＋無い取引（400。取引を探す前に入力チェックで止まる）
 PUT {{ShopListApi_HostAddress}}/transactions/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -442,7 +458,7 @@ Content-Type: application/json
 
 ### 53. 無い取引＋無い分類（404 transaction.not_found。分類より先に取引を探す）
 PUT {{ShopListApi_HostAddress}}/transactions/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -461,7 +477,7 @@ Content-Type: application/json
 # （本文のある要求のすぐ後にコメントを書くと、本文の続きとして送られるため、ここに置く）
 # @name filterCategory
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -471,7 +487,7 @@ Content-Type: application/json
 ### 55. 取引 A を作る（201）
 # @name filterA
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -485,7 +501,7 @@ Content-Type: application/json
 ### 56. 取引 B を作る（201）
 # @name filterB
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -499,7 +515,7 @@ Content-Type: application/json
 ### 57. 取引 C を作る（201。未分類のまま）
 # @name filterC
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -512,7 +528,7 @@ Content-Type: application/json
 
 ### 58. A に分類を付ける（204）
 PUT {{ShopListApi_HostAddress}}/transactions/{{filterA.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -525,7 +541,7 @@ Content-Type: application/json
 
 ### 59. B に分類を付ける（204）
 PUT {{ShopListApi_HostAddress}}/transactions/{{filterB.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 {
@@ -538,47 +554,47 @@ Content-Type: application/json
 
 ### 60. to だけ（200。A だけ。B・C と2026年の取引は出ない）
 GET {{ShopListApi_HostAddress}}/transactions?to=2001-01-15
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 61. from だけ（200。B・C と2026年の取引が出て、A は出ない）
 GET {{ShopListApi_HostAddress}}/transactions?from=2001-01-15
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 62. 期間だけ（200。B・C の2件）
 GET {{ShopListApi_HostAddress}}/transactions?from=2001-01-15&to=2001-01-31
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 63. 分類だけ（200。A・B の2件）
 GET {{ShopListApi_HostAddress}}/transactions?categoryId={{filterCategory.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 64. 分類と期間の両方（200。B の1件だけ。A は期間外、C は分類が違う）
 GET {{ShopListApi_HostAddress}}/transactions?categoryId={{filterCategory.response.body.$.id}}&from=2001-01-15&to=2001-01-31
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 65. 後片付け: A を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{filterA.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 66. 後片付け: B を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{filterB.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 67. 後片付け: C を削除する（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{filterC.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 68. 後片付け: 分類を削除する（204。A・B を消したので使われていない）
 DELETE {{ShopListApi_HostAddress}}/categories/{{filterCategory.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 # ---------- 仮の鍵（API キー） ----------
@@ -597,6 +613,18 @@ GET {{ShopListApi_HostAddress}}/categories
 X-Api-Key: 
 Accept: application/json
 
+### 71-1. 鍵で取引の登録の口に入る（400。403 ではない＝鍵でも通れる。中身が空なので何も作られない）
+POST {{ShopListApi_HostAddress}}/transactions
+X-Api-Key: {{ApiKey}}
+Content-Type: application/json
+
+{ }
+
+### 71-2. 鍵で分類の一覧（403。鍵で呼べるのは取引の登録だけ）
+GET {{ShopListApi_HostAddress}}/categories
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
 # ---------- 分類ルール・自動分類（ローカルで72から順に実行） ----------
 # 事前に AddCategoryRules をローカルDBに適用する。
 # 他人のルールが見えない・他人の分類を使えない確認は、仮ユーザー固定のため別途必要。
@@ -605,7 +633,7 @@ Accept: application/json
 ### 72. 自動分類用の分類Aを作る（201）
 # @name ruleCategoryA
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "name": "穴埋め確認A" }
@@ -613,7 +641,7 @@ Content-Type: application/json
 ### 73. 自動分類用の分類Bを作る（201）
 # @name ruleCategoryB
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "name": "穴埋め確認B" }
@@ -621,7 +649,7 @@ Content-Type: application/json
 ### 74. 短いキーワードのルールを作る（201とLocation）
 # @name shortRule
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋め", "categoryId": {{ruleCategoryA.response.body.$.id}} }
@@ -629,87 +657,87 @@ Content-Type: application/json
 ### 75. 長いキーワードのルールを後から作る（201）
 # @name longRule
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋めスーパー", "categoryId": {{ruleCategoryB.response.body.$.id}} }
 
 ### 76. 同じキーワードを登録（409 category_rule.duplicate_keyword）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋め", "categoryId": {{ruleCategoryB.response.body.$.id}} }
 
 ### 77. 無い分類を指定（422 category.not_found。999が無いことを確認する）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋め不存在", "categoryId": 999 }
 
 ### 78. 無い分類かつキーワード重複（分類のエラーを優先し422）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋め", "categoryId": 999 }
 
 ### 79. 空白だけのキーワード（400）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "   ", "categoryId": {{ruleCategoryA.response.body.$.id}} }
 
 ### 80. 51文字のキーワード（400）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "123456789012345678901234567890123456789012345678901", "categoryId": {{ruleCategoryA.response.body.$.id}} }
 
 ### 81. 分類IDを送らない（400）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋め分類なし" }
 
 ### 82. 作ったルールを1件取得（200）
 GET {{ShopListApi_HostAddress}}/category-rules/{{shortRule.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 83. 無いルール（404 category_rule.not_found。999が無いことを確認する）
 GET {{ShopListApi_HostAddress}}/category-rules/999
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 84. 一覧の2ページ目（200。id昇順・1件、totalCountは自分の全ルール件数）
 GET {{ShopListApi_HostAddress}}/category-rules?page=2&pageSize=1
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 85. page=0（400）
 GET {{ShopListApi_HostAddress}}/category-rules?page=0
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 86. pageSize=0（400）
 GET {{ShopListApi_HostAddress}}/category-rules?pageSize=0
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 87. とても大きなページ（200。itemsが空、totalCountは変わらない）
 GET {{ShopListApi_HostAddress}}/category-rules?page=2147483647&pageSize=1
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Accept: application/json
 
 ### 88. 複数一致は長い方（201。categoryIdは分類B）
 # @name longMatchTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "amount": 100, "merchant": "駅前穴埋めスーパー本店", "source": "manual" }
@@ -717,21 +745,21 @@ Content-Type: application/json
 ### 89. 一致なし（201。categoryIdはnull。他の既存ルールにも当たらない店名で試す）
 # @name noMatchTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "amount": 100, "merchant": "一致なし確認ZXQ", "source": "auto" }
 
 ### 90. 同じ長さのルールを作る（201。先に作った方は分類B）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋めAB", "categoryId": {{ruleCategoryB.response.body.$.id}} }
 
 ### 91. 同じ長さのルールを後から作る（201。後の方は分類A）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "穴埋めCD", "categoryId": {{ruleCategoryA.response.body.$.id}} }
@@ -739,42 +767,42 @@ Content-Type: application/json
 ### 92. 同じ長さなら先に作った方（201。categoryIdは分類B）
 # @name tieMatchTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "amount": 100, "merchant": "穴埋めAB-穴埋めCD店", "source": "auto" }
 
 ### 93. 取引に使われる分類Bは消せない（409 category.in_use）
 DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryB.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 94. 後片付け: 長い方に一致した取引を消す（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{longMatchTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 95. 後片付け: 一致なしの取引を消す（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{noMatchTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 96. 後片付け: 同じ長さの確認用取引を消す（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{tieMatchTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 97. 分類Aを消す（204。分類Aを指すルールも連動削除）
 DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryA.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 98. 分類Aを指していたルールも消えている（404）
 GET {{ShopListApi_HostAddress}}/category-rules/{{shortRule.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 99. 分類Bを消す（204。分類Bを指すルールも連動削除）
 DELETE {{ShopListApi_HostAddress}}/categories/{{ruleCategoryB.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 100. 分類Bを指していたルールも消えている（404）
 GET {{ShopListApi_HostAddress}}/category-rules/{{longRule.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 # ---------- 分類ルールの更新・削除（ローカルで101から順に実行） ----------
 # 72～100とは独立。ローカル環境を選び、以下の固有名の確認データが無い状態で開始する。
@@ -785,7 +813,7 @@ X-Api-Key: {{ApiKey}}
 ### 101. 更新・削除用の分類A（201）
 # @name editRuleCategoryA
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "name": "ルール更新確認A" }
@@ -793,7 +821,7 @@ Content-Type: application/json
 ### 102. 更新・削除用の分類B（201）
 # @name editRuleCategoryB
 POST {{ShopListApi_HostAddress}}/categories
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "name": "ルール更新確認B" }
@@ -801,14 +829,14 @@ Content-Type: application/json
 ### 103. 更新するルールを作る（201）
 # @name editRuleTarget
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OLD", "categoryId": {{editRuleCategoryA.response.body.$.id}} }
 
 ### 104. 重複確認用の別ルールを作る（201）
 POST {{ShopListApi_HostAddress}}/category-rules
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": {{editRuleCategoryA.response.body.$.id}} }
@@ -816,115 +844,115 @@ Content-Type: application/json
 ### 105. 更新前のルールで取引を作る（201。categoryIdは分類A）
 # @name editRuleOldTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "amount": 100, "merchant": "RULE_EDIT_ZXQ_OLD", "source": "manual" }
 
 ### 106. 同じキーワードのまま分類だけ変える（204。自分自身を重複扱いしない）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OLD", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
 
 ### 107. 別ルールと同じキーワードに変える（409 category_rule.duplicate_keyword）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
 
 ### 108. 無い分類かつ別ルールとキーワード重複（422 category.not_foundを優先）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": 2147483647 }
 
 ### 109. 無いルールかつ無い分類（404 category_rule.not_foundを優先）
 PUT {{ShopListApi_HostAddress}}/category-rules/2147483647
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_OTHER", "categoryId": 2147483647 }
 
 ### 110. 空白だけのキーワード（400）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "   ", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
 
 ### 111. 分類IDを送らない（400）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_NEW" }
 
 ### 112. 51文字のキーワード（400）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "123456789012345678901234567890123456789012345678901", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
 
 ### 113. 失敗した更新が保存されていない（200。OLDのまま、分類B）
 GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 114. キーワードと分類を変更する（204）
 PUT {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "keyword": "RULE_EDIT_ZXQ_NEW", "categoryId": {{editRuleCategoryB.response.body.$.id}} }
 
 ### 115. 更新結果を取得（200。keywordはNEW、categoryIdは分類B）
 GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 116. 更新前の取引は変わらない（200。categoryIdは分類Aのまま）
 GET {{ShopListApi_HostAddress}}/transactions/{{editRuleOldTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 117. 新しいキーワードで取引を作る（201。categoryIdは分類B）
 # @name editRuleNewTransaction
 POST {{ShopListApi_HostAddress}}/transactions
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
 { "amount": 100, "merchant": "RULE_EDIT_ZXQ_NEW", "source": "manual" }
 
 ### 118. ルールを削除（204。取引があってもルールは消せる）
 DELETE {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 119. 消したルールを取得（404 category_rule.not_found）
 GET {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 120. 消したルールをもう一度削除（404 category_rule.not_found）
 DELETE {{ShopListApi_HostAddress}}/category-rules/{{editRuleTarget.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 121. ルールを消しても取引と分類は残る（200。categoryIdは分類B）
 GET {{ShopListApi_HostAddress}}/transactions/{{editRuleNewTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 122. 後片付け: 更新前に作った取引を消す（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{editRuleOldTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 123. 後片付け: 更新後に作った取引を消す（204）
 DELETE {{ShopListApi_HostAddress}}/transactions/{{editRuleNewTransaction.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 124. 後片付け: 分類Aを消す（204。重複確認用のルールも連動削除）
 DELETE {{ShopListApi_HostAddress}}/categories/{{editRuleCategoryA.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 125. 後片付け: 分類Bを消す（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{editRuleCategoryB.response.body.$.id}}
-X-Api-Key: {{ApiKey}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
