@@ -50,6 +50,9 @@ services:
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       # 仮の鍵（設定の ApiKey:Key。ApiKeyOptions が読む）。無いと API は起動しない
       ApiKey__Key: ${API_KEY}
+      # ログインのトークンに署名する秘密鍵。設定の Jwt:PrivateKey で、JwtOptions が読む
+      # 無いと API は起動しない
+      Jwt__PrivateKey: ${JWT_PRIVATE_KEY}
 
     ports:
       # 左: PC 側（.env の API_PORT。無ければ 8080） / 右: コンテナの中（ASP.NET Core の既定の 8080）
