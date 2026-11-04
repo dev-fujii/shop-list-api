@@ -106,6 +106,13 @@ public abstract class PostgresTestBase
     protected static readonly Guid OtherUserId = new("c837d989-735d-4c18-a781-f8b7bf794527");
 
     /// <summary>
+    /// このテスト用に作ったDBの接続文字列。
+    /// HTTP を通したテストで、アプリの接続先をこのDBに向けるために使う
+    /// </summary>
+    protected string DatabaseConnectionString =>
+        _databaseConnectionString ?? throw new InvalidOperationException("テスト用DBが未準備です。");
+
+    /// <summary>
     /// このテスト用に作ったDBの接続文字列。DBを作る前は null
     /// </summary>
     private string? _databaseConnectionString;
