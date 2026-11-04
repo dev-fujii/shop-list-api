@@ -43,7 +43,7 @@ POST {{ShopListApi_HostAddress}}/categories
 Authorization: Bearer {{login.response.body.$.accessToken}}
 Content-Type: application/json
 
-{
+{ 
   "name": "食費"
 }
 
@@ -955,4 +955,36 @@ Authorization: Bearer {{login.response.body.$.accessToken}}
 
 ### 125. 後片付け: 分類Bを消す（204）
 DELETE {{ShopListApi_HostAddress}}/categories/{{editRuleCategoryB.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+# ---------- 冪等キー ----------
+# 同じキーで2回送っても取引は1件。終わったら 129 で消す
+
+### 126. キー付きで登録（201）
+# @name idemFirst
+POST {{ShopListApi_HostAddress}}/transactions
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Idempotency-Key: http-check-0001
+Content-Type: application/json
+
+{ "amount": 300, "merchant": "冪等キーの確認", "source": "manual" }
+
+### 127. 同じキー・同じ内容で送り直す（201。126 と同じ id が返る）
+POST {{ShopListApi_HostAddress}}/transactions
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Idempotency-Key: http-check-0001
+Content-Type: application/json
+
+{ "amount": 300, "merchant": "冪等キーの確認", "source": "manual" }
+
+### 128. 同じキーで金額だけ違う（422 transaction.idempotency_key_reused）
+POST {{ShopListApi_HostAddress}}/transactions
+Authorization: Bearer {{login.response.body.$.accessToken}}
+Idempotency-Key: http-check-0001
+Content-Type: application/json
+
+{ "amount": 301, "merchant": "冪等キーの確認", "source": "manual" }
+
+### 129. 後片付け: 126 の取引を消す（204）
+DELETE {{ShopListApi_HostAddress}}/transactions/{{idemFirst.response.body.$.id}}
 Authorization: Bearer {{login.response.body.$.accessToken}}
