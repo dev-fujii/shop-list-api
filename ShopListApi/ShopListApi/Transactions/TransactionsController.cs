@@ -74,13 +74,28 @@ public class TransactionsController : ControllerBase
     /// POST /transactions: 取引を登録する（201。入力が正しくなければ 400）
     /// </summary>
     /// <remarks>
-    /// iPhone のショートカットが鍵で呼ぶので、ここだけ鍵でも通す
+    /// iPhone のショートカットが鍵で呼ぶので、ここだけ鍵でも通す。
+    /// Idempotency-Key ヘッダーを付けると、同じキーで送り直しても取引は1件だけになり、同じ取引が返る
     /// </remarks>
     [HttpPost]
     [Authorize(Policy = AuthorizationPolicies.AllowApiKey)]
-    public async Task<ActionResult<TransactionResponse>> Create(CreateTransactionRequest request)
+    public async Task<ActionResult<TransactionResponse>> Create
+    (
+        CreateTransactionRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey
+    )
     {
-        var created = await _transactionService.CreateAsync(request);
+        // --- バリデーションチェック --- //
+
+        // 冪等キーは省略できる。付けるなら、空でなく64文字まで
+        if (idempotencyKey is not null &&
+            (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > Transaction.IdempotencyKeyMaxLength))
+        {
+            ModelState.AddModelError("Idempotency-Key", $"Idempotency-Key は1～{Transaction.IdempotencyKeyMaxLength}文字で指定してください。");
+            return ValidationProblem(ModelState);
+        }
+
+        var created = await _transactionService.CreateAsync(request, idempotencyKey);
 
         // 201 と、Location: /transactions/{id} を返す
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);

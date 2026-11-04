@@ -38,6 +38,16 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(t => t.Source)
             .IsRequired();
 
+        // 冪等キー: 64文字まで・省略できる
+        builder.Property(t => t.IdempotencyKey)
+            .HasMaxLength(Transaction.IdempotencyKeyMaxLength);
+
+        // 同じユーザーの中で、同じ冪等キーは1つだけ。
+        // 同じキーのリクエストが同時に来ても、DB が2件目の登録を断る。
+        // PostgreSQL の一意インデックスは null どうしを別の値として扱うので、キーの無い取引はいくつでも入る
+        builder.HasIndex(t => new { t.UserId, t.IdempotencyKey })
+            .IsUnique();
+
         // 分類への外部キー: 取引に使われている分類は消せない
         builder.HasOne<Category>()
             .WithMany()

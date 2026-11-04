@@ -287,6 +287,10 @@ namespace ShopListApi.Data.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Merchant")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -304,6 +308,9 @@ namespace ShopListApi.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("UserId", "IdempotencyKey")
+                        .IsUnique();
 
                     b.ToTable("Transactions");
                 });

@@ -25,6 +25,14 @@ public class Transaction
     public const int AmountMax = 9_999_999;
 
     /// <summary>
+    /// 冪等キーの最大文字数
+    /// </summary>
+    /// <remarks>
+    /// 送る側は UUID（36文字）を使う想定。少し余裕を持たせる
+    /// </remarks>
+    public const int IdempotencyKeyMaxLength = 64;
+
+    /// <summary>
     /// ユーザーID
     /// </summary>
     public Guid UserId { get; set; }
@@ -64,4 +72,13 @@ public class Transaction
     /// 種類（支出・収入）
     /// </summary>
     public TransactionType Type { get; set; }
+
+    /// <summary>
+    /// 冪等キー。登録のときに Idempotency-Key ヘッダーで送られた値
+    /// </summary>
+    /// <remarks>
+    /// 同じユーザーが同じキーで送り直したら、新しく登録せずにこの取引を返す。
+    /// ヘッダーが無かった取引は null
+    /// </remarks>
+    public string? IdempotencyKey { get; set; }
 }

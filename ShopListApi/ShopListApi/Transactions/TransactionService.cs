@@ -16,8 +16,22 @@ public class TransactionService
     /// 取引を作る。
     /// 日付を省略したら日本時間の今日、種類を省略したら支出にする
     /// </summary>
-    public async Task<TransactionResponse> CreateAsync(CreateTransactionRequest request)
+    /// <remarks>
+    /// 冪等キーがあり、同じキーの取引がもうあれば、新しく作らずにその取引を返す。
+    /// 同じキーなのに金額・店名・入力元が違えば 422
+    /// </remarks>
+    public async Task<TransactionResponse> CreateAsync(CreateTransactionRequest request, string? idempotencyKey = null)
     {
+        // 送り直しなら、前に登録した取引を返す
+        if (idempotencyKey is not null)
+        {
+            var existing = await FindByIdempotencyKeyAsync(idempotencyKey);
+            if (existing is not null)
+            {
+                return ToRetryResponse(existing, request);
+            }
+        }
+
         // 他人のルールを使わないように、今のユーザーのものだけ取得する。
         var rules = await _db.CategoryRules
             .AsNoTracking()
@@ -35,33 +49,27 @@ public class TransactionService
             Merchant = request.Merchant,
             Date = request.Date ?? JapanTime.Today(),
             Source = request.Source!.Value,
-            Type = request.Type ?? TransactionType.Expense
+            Type = request.Type ?? TransactionType.Expense,
+            IdempotencyKey = idempotencyKey
         };
 
         _db.Transactions.Add(transaction);
         try
         {
-            await _db.SaveChangesAsync();
+            await SaveNewTransactionAsync(transaction);
         }
-        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        catch (DbUpdateException ex) when (idempotencyKey is not null && ex.IsUniqueViolation())
         {
-            // 判定の直後に行き先の分類が消されると、外部キーに断られる。
-            // そのルールも Cascade で一緒に消えているので、当たるルールが無いときと同じく未分類で保存する。
-            // 呼ぶ側は分類を送っていないので、エラーにすると支払いの記録だけが失われるため
-            transaction.CategoryId = null;
-            await _db.SaveChangesAsync();
+            // 同じキーのリクエストが同時に来て、先に別のリクエストが登録した。
+            // 上の確認のあとなので、一意インデックスが2件目を断った。
+            // 失敗した取引は保存しないので追跡から外し、先に登録された取引を返す
+            _db.Entry(transaction).State = EntityState.Detached;
+            var saved = await FindByIdempotencyKeyAsync(idempotencyKey)
+                ?? throw new InvalidOperationException("一意インデックスに断られたのに、同じ冪等キーの取引が見つかりません。");
+            return ToRetryResponse(saved, request);
         }
 
-        return new TransactionResponse
-        {
-            CategoryId = transaction.CategoryId,
-            Id = transaction.Id,
-            Amount = transaction.Amount,
-            Merchant = transaction.Merchant,
-            Date = transaction.Date,
-            Source = transaction.Source,
-            Type = transaction.Type
-        };
+        return ToResponse(transaction);
     }
 
 
@@ -230,6 +238,80 @@ public class TransactionService
     }
 
     #region // --- 内部処理 --- //
+
+    /// <summary>
+    /// 追加する取引を保存する。分類が直前に消されていたら、未分類にして保存し直す
+    /// </summary>
+    private async Task SaveNewTransactionAsync(Transaction transaction)
+    {
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.IsForeignKeyViolation())
+        {
+            // 判定の直後に行き先の分類が消されると、外部キーに断られる。
+            // そのルールも Cascade で一緒に消えているので、当たるルールが無いときと同じく未分類で保存する。
+            // 呼ぶ側は分類を送っていないので、エラーにすると支払いの記録だけが失われるため
+            transaction.CategoryId = null;
+            await _db.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// 今のユーザーの取引を、冪等キーで探す。無ければ null
+    /// </summary>
+    private async Task<Transaction?> FindByIdempotencyKeyAsync(string idempotencyKey)
+    {
+        return await _db.Transactions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.UserId == _currentUser.Id && t.IdempotencyKey == idempotencyKey);
+    }
+
+    /// <summary>
+    /// 送り直されたリクエストに、前に登録した取引を返す
+    /// </summary>
+    /// <remarks>
+    /// 金額・店名・入力元が前と違えば、キーの使い回しとして 422 にする。
+    /// 別の支払いを、前の支払いの送り直しとして黙って捨てないため。
+    /// 日付と種類は省略すると今日・支出になり、日をまたいだ送り直しで変わりうるので比べない
+    /// </remarks>
+    private static TransactionResponse ToRetryResponse(Transaction existing, CreateTransactionRequest request)
+    {
+        var isSameRequest =
+            existing.Amount == request.Amount &&
+            existing.Merchant == request.Merchant &&
+            existing.Source == request.Source;
+
+        if (!isSameRequest)
+        {
+            throw new AppException
+            (
+                StatusCodes.Status422UnprocessableEntity,
+                ErrorCodes.Transactions.IdempotencyKeyReused,
+                "この冪等キーは、内容の違う取引の登録にもう使われています。"
+            );
+        }
+
+        return ToResponse(existing);
+    }
+
+    /// <summary>
+    /// 取引を、返す形にする
+    /// </summary>
+    private static TransactionResponse ToResponse(Transaction transaction)
+    {
+        return new TransactionResponse
+        {
+            CategoryId = transaction.CategoryId,
+            Id = transaction.Id,
+            Amount = transaction.Amount,
+            Merchant = transaction.Merchant,
+            Date = transaction.Date,
+            Source = transaction.Source,
+            Type = transaction.Type
+        };
+    }
 
     /// <summary>
     /// 更新後の店名と分類から、ルールの追加・更新を準備する

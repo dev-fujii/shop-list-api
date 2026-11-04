@@ -35,6 +35,11 @@ public static class ErrorCodes
         /// 取引が見つからない（404）
         /// </summary>
         public const string NotFound = "transaction.not_found";
+
+        /// <summary>
+        /// 同じ冪等キーで、内容の違う取引を登録しようとした（422）
+        /// </summary>
+        public const string IdempotencyKeyReused = "transaction.idempotency_key_reused";
     }
 
     /// <summary>
